@@ -29,3 +29,14 @@ func AcceptConnections(job *engine.Job) engine.Status {
 
 	return engine.StatusOK
 }
+
+// Called through eng.Job("acceptconnections")
+func AcceptConnections(job *engine.Job) engine.Status {
+
+	// close the lock so the listeners start accepting connections
+	if activationLock != nil {
+		close(activationLock)
+	}
+
+	return engine.StatusOK
+}
