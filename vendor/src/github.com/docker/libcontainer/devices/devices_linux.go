@@ -29,11 +29,13 @@ func DeviceFromPath(path, permissions string) (*configs.Device, error) {
 		fileModePermissionBits |= syscall.S_IFBLK
 		devType = 'b'
 	}
+
 	stat_t, ok := fileInfo.Sys().(*syscall.Stat_t)
 	if !ok {
 		return nil, fmt.Errorf("cannot determine the device number for device %s", path)
 	}
 	devNumber := int(stat_t.Rdev)
+
 	return &configs.Device{
 		Type:        devType,
 		Path:        path,

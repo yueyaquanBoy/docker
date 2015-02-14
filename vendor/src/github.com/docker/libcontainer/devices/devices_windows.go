@@ -13,11 +13,13 @@ func DeviceFromPath(path, permissions string) (*configs.Device, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var (
 		devType                rune
 		mode                   = fileInfo.Mode()
 		fileModePermissionBits = os.FileMode.Perm(mode)
 	)
+
 	switch {
 	case mode&os.ModeDevice == 0:
 		return nil, ErrNotADevice
@@ -28,6 +30,7 @@ func DeviceFromPath(path, permissions string) (*configs.Device, error) {
 		fileModePermissionBits |= syscall.S_IFBLK
 		devType = 'b'
 	}
+
 	//stat_t, ok := fileInfo.Sys().(*syscall.Stat_t)
 	//if !ok {
 	//	return nil, fmt.Errorf("cannot determine the device number for device %s", path)
