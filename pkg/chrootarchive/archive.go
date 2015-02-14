@@ -8,20 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"syscall"
+	"strings"
 
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/reexec"
 )
 
 var chrootArchiver = &archive.Archiver{Untar: Untar}
-
-func chroot(path string) error {
-	if err := syscall.Chroot(path); err != nil {
-		return err
-	}
-	return syscall.Chdir("/")
-}
 
 func untar() {
 	runtime.LockOSThread()
