@@ -318,7 +318,7 @@ func populateCommand(c *Container, env []string) error {
 		User:       c.Config.User,
 	}
 
-	processConfig.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	//JJH Temp processConfig.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	processConfig.Env = env
 
 	c.command = &execdriver.Command{
@@ -718,6 +718,7 @@ func (container *Container) Unpause() error {
 	return container.daemon.Unpause(container)
 }
 
+<<<<<<< HEAD
 func (container *Container) Kill() error {
 	if !container.IsRunning() {
 		return nil
@@ -746,6 +747,8 @@ func (container *Container) Kill() error {
 	return nil
 }
 
+=======
+>>>>>>> container.go refactoring Kill() for Windows
 func (container *Container) Stop(seconds int) error {
 	if !container.IsRunning() {
 		return nil
@@ -911,11 +914,20 @@ func (container *Container) GetSize() (int64, int64) {
 		sizeRw = -1
 	}
 
+<<<<<<< HEAD
 	if _, err = os.Stat(container.basefs); err != nil {
 		if sizeRootfs, err = directory.Size(container.basefs); err != nil {
 			sizeRootfs = -1
 		}
 	}
+=======
+	//JJH Temp
+	//if _, err = os.Stat(container.basefs); err != nil {
+	//	if sizeRootfs, err = utils.TreeSize(container.basefs); err != nil {
+	//		sizeRootfs = -1
+	//	}
+	//}
+>>>>>>> container.go refactoring Kill() for Windows
 	return sizeRw, sizeRootfs
 }
 
