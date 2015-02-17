@@ -1043,8 +1043,10 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 	}
 
 	// set up filesystem watch on resolv.conf for network changes
-	if err := daemon.setupResolvconfWatcher(); err != nil {
-		return nil, err
+	if runtime.GOOS != "windows" {
+		if err := daemon.setupResolvconfWatcher(); err != nil {
+			return nil, err
+		}
 	}
 
 	return daemon, nil
