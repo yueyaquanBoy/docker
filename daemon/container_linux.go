@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"strings"
 	"syscall"
 	"time"
 
