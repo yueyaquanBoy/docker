@@ -871,6 +871,7 @@ func (container *Container) DisableLink(name string) {
 	}
 }
 
+// TODO WINDOWS. This can probably be factored out.
 func (container *Container) initializeNetworking() error {
 	var err error
 	if container.hostConfig.NetworkMode.IsHost() {
