@@ -8,6 +8,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/common"
+	"github.com/docker/docker/engine"
 	"github.com/docker/docker/pkg/networkfs/resolvconf"
 	"github.com/docker/docker/utils"
 )
