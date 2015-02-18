@@ -29,15 +29,16 @@ type Config struct {
 
 	// TODO Windows. (At least...) the following block are not used by Windows
 	// Hence these should be factored out.
-	EnableIPv6      bool
-	EnableIptables  bool
-	EnableIpForward bool
-	EnableIpMasq    bool
-	DefaultIp       net.IP
-	BridgeIface     string
-	BridgeIP        string
-	FixedCIDR       string
-	FixedCIDRv6     string
+	EnableIPv6           bool
+	EnableIptables       bool
+	EnableIpForward      bool
+	EnableIpMasq         bool
+	DefaultIp            net.IP
+	BridgeIface          string
+	BridgeIP             string
+	FixedCIDR            string
+	FixedCIDRv6          string
+	EnableSelinuxSupport bool
 	// End TODO Windows
 
 	InterContainerCommunication bool

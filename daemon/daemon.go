@@ -1,15 +1,13 @@
 package daemon
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
-	"path/filepath"
+
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -17,12 +15,9 @@ import (
 	"github.com/docker/libcontainer/label"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/docker/docker/api"
 	"github.com/docker/docker/autogen/dockerversion"
 	"github.com/docker/docker/daemon/execdriver"
-	"github.com/docker/docker/daemon/execdriver/execdrivers"
 	"github.com/docker/docker/daemon/graphdriver"
-	"github.com/docker/docker/daemon/networkdriver/portallocator"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/graph"
 	"github.com/docker/docker/image"
@@ -32,7 +27,6 @@ import (
 	"github.com/docker/docker/pkg/graphdb"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/namesgenerator"
-	"github.com/docker/docker/pkg/networkfs/resolvconf"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/sysinfo"
 	"github.com/docker/docker/pkg/truncindex"
@@ -40,8 +34,6 @@ import (
 	"github.com/docker/docker/trust"
 	"github.com/docker/docker/utils"
 	"github.com/docker/docker/volumes"
-
-	"github.com/go-fsnotify/fsnotify"
 )
 
 var (
@@ -422,62 +414,6 @@ func (daemon *Daemon) restore() error {
 	return nil
 }
 
-// set up the watch on the host's /etc/resolv.conf so that we can update container's
-// live resolv.conf when the network changes on the host
-func (daemon *Daemon) setupResolvconfWatcher() error {
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-
-	//this goroutine listens for the events on the watch we add
-	//on the resolv.conf file on the host
-	go func() {
-		for {
-			select {
-			case event := <-watcher.Events:
-				if event.Name == "/etc/resolv.conf" &&
-					(event.Op&fsnotify.Write == fsnotify.Write ||
-						event.Op&fsnotify.Create == fsnotify.Create) {
-					// verify a real change happened before we go further--a file write may have happened
-					// without an actual change to the file
-					updatedResolvConf, newResolvConfHash, err := resolvconf.GetIfChanged()
-					if err != nil {
-						log.Debugf("Error retrieving updated host resolv.conf: %v", err)
-					} else if updatedResolvConf != nil {
-						// because the new host resolv.conf might have localhost nameservers..
-						updatedResolvConf, modified := resolvconf.FilterResolvDns(updatedResolvConf, daemon.config.EnableIPv6)
-						if modified {
-							// changes have occurred during localhost cleanup: generate an updated hash
-							newHash, err := utils.HashData(bytes.NewReader(updatedResolvConf))
-							if err != nil {
-								log.Debugf("Error generating hash of new resolv.conf: %v", err)
-							} else {
-								newResolvConfHash = newHash
-							}
-						}
-						log.Debugf("host network resolv.conf changed--walking container list for updates")
-						contList := daemon.containers.List()
-						for _, container := range contList {
-							if err := container.updateResolvConf(updatedResolvConf, newResolvConfHash); err != nil {
-								log.Debugf("Error on resolv.conf update check for container ID: %s: %v", container.ID, err)
-							}
-						}
-					}
-				}
-			case err := <-watcher.Errors:
-				log.Debugf("host resolv.conf notify error: %v", err)
-			}
-		}
-	}()
-
-	if err := watcher.Add("/etc"); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (daemon *Daemon) checkDeprecatedExpose(config *runconfig.Config) bool {
 	if config != nil {
 		if config.PortSpecs != nil {
@@ -797,6 +733,7 @@ func NewDaemon(config *Config, eng *engine.Engine) (*Daemon, error) {
 	return daemon, nil
 }
 
+<<<<<<< HEAD
 func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error) {
 	if config.Mtu == 0 {
 		config.Mtu = getDefaultNetworkMtu()
@@ -1059,6 +996,8 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 	return daemon, nil
 }
 
+=======
+>>>>>>> Factored out NewDaemonFromDirectory to Linux and Windows. Still some work on Linux to do
 func (daemon *Daemon) shutdown() error {
 	group := sync.WaitGroup{}
 	log.Debugf("starting clean shutdown of all containers...")
