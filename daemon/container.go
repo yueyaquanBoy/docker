@@ -366,6 +366,7 @@ func (container *Container) Start() (err error) {
 		}
 	}()
 
+	// Note setupContainerDns is a no-op on the Windows daemon
 	if err := container.setupContainerDns(); err != nil {
 		return err
 	}
