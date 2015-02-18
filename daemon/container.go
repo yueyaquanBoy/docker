@@ -718,37 +718,6 @@ func (container *Container) Unpause() error {
 	return container.daemon.Unpause(container)
 }
 
-<<<<<<< HEAD
-func (container *Container) Kill() error {
-	if !container.IsRunning() {
-		return nil
-	}
-
-	// 1. Send SIGKILL
-	if err := container.killPossiblyDeadProcess(9); err != nil {
-		return err
-	}
-
-	// 2. Wait for the process to die, in last resort, try to kill the process directly
-	if _, err := container.WaitStop(10 * time.Second); err != nil {
-		// Ensure that we don't kill ourselves
-		if pid := container.GetPid(); pid != 0 {
-			log.Infof("Container %s failed to exit within 10 seconds of kill - trying direct SIGKILL", common.TruncateID(container.ID))
-			if err := syscall.Kill(pid, 9); err != nil {
-				if err != syscall.ESRCH {
-					return err
-				}
-				log.Debugf("Cannot kill process (pid=%d) with signal 9: no such process.", pid)
-			}
-		}
-	}
-
-	container.WaitStop(-1 * time.Second)
-	return nil
-}
-
-=======
->>>>>>> container.go refactoring Kill() for Windows
 func (container *Container) Stop(seconds int) error {
 	if !container.IsRunning() {
 		return nil
@@ -1145,6 +1114,7 @@ func (container *Container) initializeNetworking() error {
 	return container.buildHostnameAndHostsFiles(container.NetworkSettings.IPAddress)
 }
 
+<<<<<<< HEAD
 // Make sure the config is compatible with the current kernel
 func (container *Container) verifyDaemonSettings() {
 	if container.Config.Memory > 0 && !container.daemon.sysInfo.MemoryLimit {
@@ -1160,6 +1130,8 @@ func (container *Container) verifyDaemonSettings() {
 	}
 }
 
+=======
+>>>>>>> Factored out verifyDaemonSettings as NoOp on Windows
 func (container *Container) setupLinkedContainers() ([]string, error) {
 	var (
 		env    []string
