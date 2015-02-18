@@ -904,7 +904,6 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 	case "linux":
 		driverName = "vfs"
 	case "windows":
-		// TODO Windows. This driver does not yet exist. Name TBC.
 		driverName = "windows"
 	}
 
