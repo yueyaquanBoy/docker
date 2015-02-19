@@ -145,15 +145,15 @@ func (container *Container) updateParentsHosts() error {
 // Make sure the config is compatible with the current kernel
 func (container *Container) verifyDaemonSettings() {
 	if container.Config.Memory > 0 && !container.daemon.sysInfo.MemoryLimit {
-		log.Infof("WARNING: Your kernel does not support memory limit capabilities. Limitation discarded.")
+		log.Warnf("Your kernel does not support memory limit capabilities. Limitation discarded.")
 		container.Config.Memory = 0
 	}
 	if container.Config.Memory > 0 && !container.daemon.sysInfo.SwapLimit {
-		log.Infof("WARNING: Your kernel does not support swap limit capabilities. Limitation discarded.")
+		log.Warnf("Your kernel does not support swap limit capabilities. Limitation discarded.")
 		container.Config.MemorySwap = -1
 	}
 	if container.daemon.sysInfo.IPv4ForwardingDisabled {
-		log.Infof("WARNING: IPv4 forwarding is disabled. Networking will not work")
+		log.Warnf("IPv4 forwarding is disabled. Networking will not work")
 	}
 }
 
@@ -370,4 +370,59 @@ func (container *Container) updateResolvConf(updatedResolvConf []byte, newResolv
 		return os.Rename(tmpResolvFile.Name(), container.ResolvConfPath)
 	}
 	return nil
+}
+
+func (container *Container) initializeNetworking() error {
+	var err error
+	if container.hostConfig.NetworkMode.IsHost() {
+		container.Config.Hostname, err = os.Hostname()
+		if err != nil {
+			return err
+		}
+
+		parts := strings.SplitN(container.Config.Hostname, ".", 2)
+		if len(parts) > 1 {
+			container.Config.Hostname = parts[0]
+			container.Config.Domainname = parts[1]
+		}
+
+		content, err := ioutil.ReadFile("/etc/hosts")
+		if os.IsNotExist(err) {
+			return container.buildHostnameAndHostsFiles("")
+		} else if err != nil {
+			return err
+		}
+
+		if err := container.buildHostnameFile(); err != nil {
+			return err
+		}
+
+		hostsPath, err := container.getRootResourcePath("hosts")
+		if err != nil {
+			return err
+		}
+		container.HostsPath = hostsPath
+
+		return ioutil.WriteFile(container.HostsPath, content, 0644)
+	}
+	if container.hostConfig.NetworkMode.IsContainer() {
+		// we need to get the hosts files from the container to join
+		nc, err := container.getNetworkedContainer()
+		if err != nil {
+			return err
+		}
+		container.HostsPath = nc.HostsPath
+		container.ResolvConfPath = nc.ResolvConfPath
+		container.Config.Hostname = nc.Config.Hostname
+		container.Config.Domainname = nc.Config.Domainname
+		return nil
+	}
+	if container.daemon.config.DisableNetwork {
+		container.Config.NetworkDisabled = true
+		return container.buildHostnameAndHostsFiles("127.0.1.1")
+	}
+	if err := container.AllocateNetwork(); err != nil {
+		return err
+	}
+	return container.buildHostnameAndHostsFiles(container.NetworkSettings.IPAddress)
 }
