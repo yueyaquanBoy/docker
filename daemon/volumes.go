@@ -306,6 +306,7 @@ func validMountMode(mode string) bool {
 	return validModes[mode]
 }
 
+// TODO Windows. This is not currently called and will need factoring out.
 func (container *Container) setupMounts() error {
 	mounts := []execdriver.Mount{}
 
