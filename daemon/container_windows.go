@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"github.com/docker/docker/daemon/execdriver"
 	"time"
 )
 
@@ -49,6 +50,9 @@ func (container *Container) Start() (err error) {
 	}
 
 	// This is where is Linux it calls into the Exec Driver. TODO WINDOWS (see populateCommand())
+	if err := populateCommand(container, nil); err != nil {
+		return err
+	}
 
 	return container.waitForStart()
 }
@@ -68,4 +72,50 @@ func (container *Container) prepareVolumes() error {
 // GetSize, return real size, virtual size
 func (container *Container) GetSize() (int64, int64) {
 	return 0, 0
+}
+
+func populateCommand(c *Container, env []string) error {
+
+	pid := &execdriver.Pid{}
+	pid.HostPid = c.hostConfig.PidMode.IsHost()
+
+	resources := &execdriver.Resources{
+		Memory:     c.Config.Memory,
+		MemorySwap: c.Config.MemorySwap,
+		CpuShares:  c.Config.CpuShares,
+		Cpuset:     c.Config.Cpuset,
+	}
+
+	processConfig := execdriver.ProcessConfig{
+		Privileged: c.hostConfig.Privileged,
+		Entrypoint: c.Path,
+		Arguments:  c.Args,
+		Tty:        c.Config.Tty,
+		User:       c.Config.User,
+	}
+
+	processConfig.Env = env
+
+	c.command = &execdriver.Command{
+		ID:             c.ID,
+		Rootfs:         c.RootfsPath(),
+		ReadonlyRootfs: c.hostConfig.ReadonlyRootfs,
+		InitPath:       "/.dockerinit",
+		WorkingDir:     c.Config.WorkingDir,
+		//		Network:            en,
+		//		Ipc:                ipc,
+		Pid:       pid,
+		Resources: resources,
+		//		AllowedDevices:     allowedDevices,
+		//		AutoCreatedDevices: autoCreatedDevices,
+		CapAdd:        c.hostConfig.CapAdd,
+		CapDrop:       c.hostConfig.CapDrop,
+		ProcessConfig: processConfig,
+		ProcessLabel:  c.GetProcessLabel(),
+		MountLabel:    c.GetMountLabel(),
+		//		LxcConfig:          lxcConfig,
+		//		AppArmorProfile:    c.AppArmorProfile,
+	}
+
+	return nil
 }
