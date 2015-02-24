@@ -3,6 +3,7 @@
 package windowsgraphdriver
 
 import (
+	"os"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
@@ -48,32 +49,32 @@ func (a *Driver) Status() [][2]string {
 // Exists returns true if the given id is registered with
 // this driver
 func (a *Driver) Exists(id string) bool {
-	log.Debugln("WindowsGraphDriver Exists()")
+	log.Debugln("WindowsGraphDriver Exists() %s", id)
 	return false
 }
 
 // Three folders are created for each id
 // mnt, layers, and diff
 func (a *Driver) Create(id, parent string) error {
-	log.Debugln("WindowsGraphDriver Create()")
+	log.Debugln("WindowsGraphDriver Create() id %s, parent %s", id, parent)
 	return nil
 }
 
 // Unmount and remove the dir information
 func (a *Driver) Remove(id string) error {
-	log.Debugln("WindowsGraphDriver Remote()")
+	log.Debugln("WindowsGraphDriver Remove() %s", id)
 	return nil
 }
 
 // Return the rootfs path for the id
 // This will mount the dir at it's given path
 func (a *Driver) Get(id, mountLabel string) (string, error) {
-	log.Debugln("WindowsGraphDriver Get()")
-	return "Not implemented path", nil
+	log.Debugln("WindowsGraphDriver Get() %s %s", id, mountLabel)
+	return os.Getenv("temp"), nil
 }
 
 func (a *Driver) Put(id string) error {
-	log.Debugln("WindowsGraphDriver Put()")
+	log.Debugln("WindowsGraphDriver Put() %s", id)
 	return nil
 }
 
