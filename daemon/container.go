@@ -26,7 +26,6 @@ import (
 	"github.com/docker/docker/pkg/common"
 	"github.com/docker/docker/pkg/directory"
 	"github.com/docker/docker/pkg/ioutils"
-	"github.com/docker/docker/pkg/networkfs/etchosts"
 	"github.com/docker/docker/pkg/promise"
 	"github.com/docker/docker/pkg/symlink"
 	"github.com/docker/docker/pkg/ulimit"
