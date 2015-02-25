@@ -43,7 +43,8 @@ func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessCo
 }
 
 func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallback execdriver.StartCallback) (execdriver.ExitStatus, error) {
-	// Not yet implemented
+	// Partial implementation. Just runs notepad for now.
+	// TODO Windows
 	log.Debugln("windowsexec::run c.")
 	log.Debugln(" - ID            : ", c.ID)
 	log.Debugln(" - RootFs        : ", c.Rootfs)
@@ -109,7 +110,11 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
-	c.ContainerPid = pid
+	// JJH For now, get the pid out of the ProcessConfig object.
+	c.ContainerPid = c.ProcessConfig.Process.Pid
+	pid = c.ProcessConfig.Process.Pid
+
+	log.Debugln("PID of 'container' is ", c.ContainerPid)
 
 	if startCallback != nil {
 		startCallback(&c.ProcessConfig, pid)
@@ -155,19 +160,25 @@ func (d *driver) waitForStart(c *execdriver.Command, waitLock chan struct{}) (in
 }
 
 func (d *driver) Kill(p *execdriver.Command, sig int) error {
-	return fmt.Errorf("windowsexec: Kill() not implemented")
+
+	// JJH Hacked together. Just kill the PID we spawned
+	log.Debugln("Kill() pid=", p.ProcessConfig.Process.Pid)
+	log.Debugln("Kill() sig=", sig)
+
+	err := p.ProcessConfig.Process.Kill()
+	return err
 }
 
 func (d *driver) Pause(c *execdriver.Command) error {
-
-	return fmt.Errorf("windowsexec: Pause() not implemented")
+	return fmt.Errorf("windowsexec: Pause() not implemented but would pause PID %d", c.ProcessConfig.Process.Pid)
 }
 
 func (d *driver) Unpause(c *execdriver.Command) error {
-	return fmt.Errorf("windowsexec: Unpause() not implemented")
+	return fmt.Errorf("windowsexec: Pause() not implemented but would Unpause PID %d", c.ProcessConfig.Process.Pid)
 }
 
 func (d *driver) Terminate(p *execdriver.Command) error {
+	//return Kill(p,9)
 	return fmt.Errorf("windowsexec: Terminate() not implemented")
 }
 
