@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -196,9 +197,13 @@ func (b *Builder) readDockerfile() error {
 
 	origFile := b.dockerfileName
 
+	// Do not perform scope check on Windows. Filename will not be relative here.
+	if runtime.GOOS != "windows" {
 	filename, err := symlink.FollowSymlinkInScope(filepath.Join(b.contextPath, origFile), b.contextPath)
 	if err != nil {
 		return fmt.Errorf("The Dockerfile (%s) must be within the build context", origFile)
+	} else {
+		filename = origFile
 	}
 
 	fi, err := os.Lstat(filename)
