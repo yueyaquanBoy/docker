@@ -43,6 +43,9 @@ func (b *Builder) readContext(context io.Reader) error {
 		return err
 	}
 
+	log.Debugln("readContext() using tmpdir: ", tmpdirPath)
+	log.Debugln("readContext() b.dockerfilename: ", b.dockerfileName)
+
 	decompressedStream, err := archive.DecompressStream(context)
 	if err != nil {
 		return err
@@ -51,6 +54,7 @@ func (b *Builder) readContext(context io.Reader) error {
 	if b.context, err = tarsum.NewTarSum(decompressedStream, true, tarsum.Version0); err != nil {
 		return err
 	}
+	log.Debugln("readContext() b.contextPath: ", b.contextPath)
 
 	if err := chrootarchive.Untar(b.context, tmpdirPath, nil); err != nil {
 		return err

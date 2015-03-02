@@ -29,7 +29,20 @@ func untar() {
 	if err := chroot(flag.Arg(0)); err != nil {
 		fatal(err)
 	}
-	if err := archive.Unpack(os.Stdin, "/", options); err != nil {
+
+	// Explanation of Windows vs Linux functionality. Windows does not support chroot.
+	// This function is a helper function for the command line in the format
+	// "docker docker-untar directory input". In Windows directory will be something
+	// like %temp%\docker-buildnnnnnnnnn. So, just use that directory directly instead.
+	//
+	// One example of where this is used is in the docker build command where the
+	// dockerfile will be unpacked to the machine on which the daemon runs.
+
+	rootPath := "/"
+	if runtime.GOOS == "windows" {
+		rootPath = flag.Arg(0)
+	}
+	if err := archive.Unpack(os.Stdin, rootPath, options); err != nil {
 		fatal(err)
 	}
 	// fully consume stdin in case it is zero padded

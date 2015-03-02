@@ -199,14 +199,21 @@ func (b *Builder) readDockerfile() error {
 
 	// Do not perform scope check on Windows. Filename will not be relative here.
 	if runtime.GOOS != "windows" {
-	filename, err := symlink.FollowSymlinkInScope(filepath.Join(b.contextPath, origFile), b.contextPath)
-	if err != nil {
-		return fmt.Errorf("The Dockerfile (%s) must be within the build context", origFile)
+		filename, err := symlink.FollowSymlinkInScope(filepath.Join(b.contextPath, origFile), b.contextPath)
+		if err != nil {
+			return fmt.Errorf("The Dockerfile (%s) must be within the build context", origFile)
+		}
 	} else {
-		filename = origFile
+		filename = filepath.Join(b.contextPath, origFile)
 	}
 
-	fi, err := os.Lstat(filename)
+	// Use stat on Windows
+	if runtime.GOOS != "windows" {
+		fi, err = os.Lstat(filename)
+	} else {
+		fi, err = os.Stat(filename)
+	}
+
 	if os.IsNotExist(err) {
 		return fmt.Errorf("Cannot locate specified Dockerfile: %s", origFile)
 	}

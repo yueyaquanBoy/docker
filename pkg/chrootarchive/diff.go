@@ -46,11 +46,12 @@ func applyLayer() {
 		defer system.Umask(oldmask)
 	}
 
-	// Use a different root when not using chroot on Windows
+	// Due to lack of chroot on Windows, use the directory passed in which will be
+	// under %temp%\docker-buildnnnnnnnnn
 	if runtime.GOOS != "windows" {
 		tmpDir, err = ioutil.TempDir("/", "temp-docker-extract")
 	} else {
-		tmpDir, err = ioutil.TempDir("", "temp-docker-extract")
+		tmpDir, err = ioutil.TempDir(flag.Arg(0), "temp-docker-extract")
 	}
 	if err != nil {
 		fatal(err)
@@ -62,7 +63,7 @@ func applyLayer() {
 	if runtime.GOOS != "windows" {
 		size, err = archive.UnpackLayer("/", os.Stdin)
 	} else {
-		size, err = archive.UnpackLayer(os.TempDir(), os.Stdin)
+		size, err = archive.UnpackLayer(flag.Arg(0), os.Stdin)
 	}
 	os.RemoveAll(tmpDir)
 	if err != nil {
