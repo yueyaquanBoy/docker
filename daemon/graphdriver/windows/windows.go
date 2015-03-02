@@ -3,12 +3,14 @@
 package windowsgraphdriver
 
 import (
+	"fmt"
 	"os"
-	"sync"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/graphdriver"
-	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/chrootarchive"
+	"github.com/docker/libcontainer/label"
 )
 
 func init() {
@@ -16,21 +18,20 @@ func init() {
 }
 
 type Driver struct {
-	root       string
-	sync.Mutex // Protects concurrent modification to active
-	active     map[string]int
+	home string
 }
 
 // New returns a new WINDOWS driver.
-func Init(root string, options []string) (graphdriver.Driver, error) {
+func Init(home string, options []string) (graphdriver.Driver, error) {
 
-	log.Debugln("WindowsGraphDriver Init()")
-	a := &Driver{
-		root:   root,
-		active: make(map[string]int),
+	log.Debugln("WindowsGraphDriver Init() home", home)
+	d := &Driver{
+		home: home,
 	}
 
-	return a, nil
+	//return d, nil
+	return graphdriver.NaiveDiffDriver(d), nil
+
 }
 
 func (*Driver) String() string {
@@ -38,7 +39,7 @@ func (*Driver) String() string {
 	return "windows"
 }
 
-func (a *Driver) Status() [][2]string {
+func (d *Driver) Status() [][2]string {
 
 	log.Debugln("WindowsGraphDriver Status()")
 	return [][2]string{
@@ -48,68 +49,80 @@ func (a *Driver) Status() [][2]string {
 
 // Exists returns true if the given id is registered with
 // this driver
-func (a *Driver) Exists(id string) bool {
-	log.Debugln("WindowsGraphDriver Exists() %s", id)
-	return false
+func (d *Driver) Exists(id string) bool {
+
+	_, err := os.Stat(d.dir(id))
+	if err == nil {
+		log.Debugln("WindowsGraphDriver Exists() - DOES", id, d.dir(id))
+	} else {
+		log.Debugln("WindowsGraphDriver Exists() - DOES NOT EXIST", id, d.dir(id))
+	}
+	return err == nil
 }
 
-// Three folders are created for each id
-// mnt, layers, and diff
-func (a *Driver) Create(id, parent string) error {
+func (d *Driver) Create(id, parent string) error {
 	log.Debugln("WindowsGraphDriver Create() id %s, parent %s", id, parent)
+
+	dir := d.dir(id)
+	log.Debugln("dir=", dir)
+	if err := os.MkdirAll(filepath.Dir(dir), 0700); err != nil {
+		return err
+	}
+	if err := os.Mkdir(dir, 0755); err != nil {
+		return err
+	}
+	opts := []string{"level:s0"}
+	if _, mountLabel, err := label.InitLabels(opts); err == nil {
+		label.Relabel(dir, mountLabel, "")
+	}
+	if parent == "" {
+		return nil
+	}
+	parentDir, err := d.Get(parent, "")
+	if err != nil {
+		return fmt.Errorf("%s: %s", parent, err)
+	}
+	log.Debugln("Calling chrootarchive.CopyWithTar parentDir", parentDir)
+	log.Debugln("Calling chrootarchive.CopyWithTar dir", dir)
+	if err := chrootarchive.CopyWithTar(parentDir, dir); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (d *Driver) dir(id string) string {
+	return filepath.Join(d.home, "dir", filepath.Base(id))
 }
 
 // Unmount and remove the dir information
-func (a *Driver) Remove(id string) error {
-	log.Debugln("WindowsGraphDriver Remove() %s", id)
-	return nil
+func (d *Driver) Remove(id string) error {
+	log.Debugln("WindowsGraphDriver Remove()", id)
+	if _, err := os.Stat(d.dir(id)); err != nil {
+		return err
+	}
+	return os.RemoveAll(d.dir(id))
+
 }
 
 // Return the rootfs path for the id
 // This will mount the dir at it's given path
-func (a *Driver) Get(id, mountLabel string) (string, error) {
-	log.Debugln("WindowsGraphDriver Get() %s %s", id, mountLabel)
-	return os.Getenv("temp"), nil
+func (d *Driver) Get(id, mountLabel string) (string, error) {
+	log.Debugln("WindowsGraphDriver Get()", id, mountLabel)
+	dir := d.dir(id)
+	if st, err := os.Stat(dir); err != nil {
+		return "", err
+	} else if !st.IsDir() {
+		return "", fmt.Errorf("%s: not a directory", dir)
+	}
+	return dir, nil
 }
 
-func (a *Driver) Put(id string) error {
+func (d *Driver) Put(id string) error {
 	log.Debugln("WindowsGraphDriver Put() %s", id)
 	return nil
 }
 
-// Diff produces an archive of the changes between the specified
-// layer and its parent layer which may be "".
-func (a *Driver) Diff(id, parent string) (archive.Archive, error) {
-	log.Debugln("WindowsGraphDriver Diff()")
-	return nil, nil
-}
-
-// DiffSize calculates the changes between the specified id
-// and its parent and returns the size in bytes of the changes
-// relative to its base filesystem directory.
-func (a *Driver) DiffSize(id, parent string) (size int64, err error) {
-	log.Debugln("WindowsGraphDriver DiffSize()")
-	return 0, nil
-}
-
-// ApplyDiff extracts the changeset from the given diff into the
-// layer with the specified id and parent, returning the size of the
-// new layer in bytes.
-func (a *Driver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (size int64, err error) {
-	log.Debugln("WindowsGraphDriver ApplyDiff()")
-	return 0, nil
-}
-
-// Changes produces a list of changes between the specified layer
-// and its parent layer. If parent is "", then all changes will be ADD changes.
-func (a *Driver) Changes(id, parent string) ([]archive.Change, error) {
-	log.Debugln("WindowsGraphDriver Changes()")
-	return nil, nil
-}
-
-// During cleanup needs to unmount all mountpoints
-func (a *Driver) Cleanup() error {
+func (d *Driver) Cleanup() error {
 	log.Debugln("WindowsGraphDriver Cleanup()")
 	return nil
 }
