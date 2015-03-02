@@ -5,7 +5,6 @@ package daemon
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -95,14 +94,14 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 	}
 	log.Debugf("Using graph driver %s", driver)
 
-	daemonRepo := path.Join(config.Root, "containers")
+	daemonRepo := filepath.Join(config.Root, "containers")
 
 	if err := os.MkdirAll(daemonRepo, 0700); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
 
 	log.Debugf("Creating images graph")
-	g, err := graph.NewGraph(path.Join(config.Root, "graph"), driver)
+	g, err := graph.NewGraph(filepath.Join(config.Root, "graph"), driver)
 	if err != nil {
 		return nil, err
 	}
@@ -123,12 +122,12 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 	}
 
 	log.Debugf("Creating repository list")
-	repositories, err := graph.NewTagStore(path.Join(config.Root, "repositories-"+driver.String()), g, trustKey)
+	repositories, err := graph.NewTagStore(filepath.Join(config.Root, "repositories-"+driver.String()), g, trustKey)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create Tag store: %s", err)
 	}
 
-	trustDir := path.Join(config.Root, "trust")
+	trustDir := filepath.Join(config.Root, "trust")
 	if err := os.MkdirAll(trustDir, 0700); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
@@ -145,7 +144,7 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 		}
 	}
 
-	graphdbPath := path.Join(config.Root, "linkgraph.db")
+	graphdbPath := filepath.Join(config.Root, "linkgraph.db")
 	graph, err := graphdb.NewSqliteConn(graphdbPath)
 	if err != nil {
 		return nil, err
