@@ -20,34 +20,57 @@ type applyLayerResponse struct {
 }
 
 func applyLayer() {
+
+	var (
+		tmpDir  string = ""
+		oldmask int    = 0
+		err     error  = nil
+		size    int64  = 0
+	)
+
 	runtime.LockOSThread()
 	flag.Parse()
 
-	if err := chroot(flag.Arg(0)); err != nil {
-		fatal(err)
+	// Windows does not support chroot or Umask. On Windows, we untar the layer using the actual directory instead
+	if runtime.GOOS != "windows" {
+		if err = chroot(flag.Arg(0)); err != nil {
+			fatal(err)
+		}
+
+		// We need to be able to set any perms
+		oldmask, err = system.Umask(0)
+		if err != nil {
+			fatal(err)
+		}
+
+		defer system.Umask(oldmask)
 	}
 
-	// We need to be able to set any perms
-	oldmask, err := system.Umask(0)
-	if err != nil {
-		fatal(err)
+	// Use a different root when not using chroot on Windows
+	if runtime.GOOS != "windows" {
+		tmpDir, err = ioutil.TempDir("/", "temp-docker-extract")
+	} else {
+		tmpDir, err = ioutil.TempDir("", "temp-docker-extract")
 	}
-
-	defer system.Umask(oldmask)
-	tmpDir, err := ioutil.TempDir("/", "temp-docker-extract")
 	if err != nil {
 		fatal(err)
 	}
 
 	os.Setenv("TMPDIR", tmpDir)
-	size, err := archive.UnpackLayer("/", os.Stdin)
+
+	// Use a different root when running on Windows
+	if runtime.GOOS != "windows" {
+		size, err = archive.UnpackLayer("/", os.Stdin)
+	} else {
+		size, err = archive.UnpackLayer(os.TempDir(), os.Stdin)
+	}
 	os.RemoveAll(tmpDir)
 	if err != nil {
 		fatal(err)
 	}
 
 	encoder := json.NewEncoder(os.Stdout)
-	if err := encoder.Encode(applyLayerResponse{size}); err != nil {
+	if err = encoder.Encode(applyLayerResponse{size}); err != nil {
 		fatal(fmt.Errorf("unable to encode layerSize JSON: %s", err))
 	}
 
