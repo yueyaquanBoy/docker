@@ -7,7 +7,9 @@ import (
 )
 
 func (info *FileInfo) isDir() bool {
-	return info.parent == nil || info.stat.FileAttributes()&syscall.FILE_ATTRIBUTE_DIRECTORY == syscall.FILE_ATTRIBUTE_DIRECTORY
+	return info.parent == nil || info.stat.IsDir()
+	// TODO WINDOWS JJH Think I want the above line. Verify.
+	//return info.parent == nil || info.stat.FileAttributes()&syscall.FILE_ATTRIBUTE_DIRECTORY == syscall.FILE_ATTRIBUTE_DIRECTORY
 }
 
 func statDifferent(oldStat *system.Stat, newStat *system.Stat) bool {

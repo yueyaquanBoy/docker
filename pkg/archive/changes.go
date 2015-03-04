@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -152,7 +153,7 @@ type FileInfo struct {
 
 func (root *FileInfo) LookUp(path string) *FileInfo {
 	parent := root
-	if path == "/" {
+	if path == string(os.PathSeparator) {
 		return root
 	}
 
@@ -282,6 +283,16 @@ func collectFileInfo(sourceDir string) (*FileInfo, error) {
 			return err
 		}
 		relPath = filepath.Join(string(os.PathSeparator), relPath)
+
+		// See https://github.com/golang/go/issues/9168 - bug in filepath.Join.
+		// Temporary workaround ahead of golang 1.5 release. If the returned
+		// path starts with two backslashes, trim it down to a single
+		// backslash.
+		if runtime.GOOS == "windows" {
+			if strings.HasPrefix(relPath, "\\\\") {
+				relPath = relPath[1:len(relPath)]
+			}
+		}
 
 		if relPath == string(os.PathSeparator) {
 			return nil

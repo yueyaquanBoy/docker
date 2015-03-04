@@ -3,43 +3,36 @@
 package system
 
 import (
-	"syscall"
+	"os"
+	"time"
 )
 
 type Stat struct {
-	fileAttributes uint32
-	creationTime   syscall.Filetime
-	lastWriteTime  syscall.Filetime
-	fileSizeHigh   uint32
-	fileSizeLow    uint32
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
 }
 
-func (s Stat) FileAttributes() uint32 {
-	return s.fileAttributes
+func (s Stat) Name() string {
+	return s.name
 }
 
-func (s Stat) CreationTime() syscall.Filetime {
-	return s.creationTime
+func (s Stat) Size() int64 {
+	return s.size
 }
 
-func (s Stat) LastWriteTime() syscall.Filetime {
-	return s.lastWriteTime
+func (s Stat) Mode() os.FileMode {
+	return s.mode
 }
 
-func (s Stat) FileSizeHigh() uint32 {
-	return s.fileSizeHigh
+func (s Stat) ModTime() time.Time {
+	return s.modTime
 }
 
-func (s Stat) FileSizeLow() uint32 {
-	return s.fileSizeLow
-}
-
-func fromStatT(s *syscall.Win32FileAttributeData) (*Stat, error) {
-	return &Stat{fileAttributes: s.FileAttributes,
-		creationTime:  s.CreationTime,
-		lastWriteTime: s.LastWriteTime,
-		fileSizeHigh:  s.FileSizeHigh,
-		fileSizeLow:   s.FileSizeLow}, nil
+func (s Stat) IsDir() bool {
+	return s.isDir
 }
 
 func Stat(path string) (*Stat_t, error) {
