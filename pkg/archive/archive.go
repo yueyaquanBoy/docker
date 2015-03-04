@@ -180,6 +180,9 @@ func canonicalTarName(name string, isDir bool) (string, error) {
 		return "", err
 	}
 
+	// BUGBUG - JJH WINDOWS TODO. This is ok when WIndows is decompressing an Ubuntu tar, but
+	// will probably be problematic otherwise. Think about how to use os.PathSeparator
+
 	// suffix with '/' for directories
 	if isDir && !strings.HasSuffix(name, "/") {
 		name += "/"
@@ -272,6 +275,7 @@ func Tar(path string, compression Compression) (io.ReadCloser, error) {
 func escapeName(name string) string {
 	escaped := make([]byte, 0)
 	for i, c := range []byte(name) {
+		// JJH WINDOWS TODO. This might be problematic. os.PathSeparator possibly?
 		if i == 0 && c == '/' {
 			continue
 		}
@@ -358,6 +362,7 @@ func TarWithOptions(srcPath string, options *TarOptions) (io.ReadCloser, error) 
 				seen[relFilePath] = true
 
 				// Rename the base resource
+				// JJH WINDOWS TODO: This might be problematic. Consider os.PathSeparator
 				if options.Name != "" && filePath == srcPath+"/"+filepath.Base(relFilePath) {
 					renamedRelFilePath = relFilePath
 				}
@@ -417,6 +422,7 @@ loop:
 			}
 		}
 
+		// JJH WINDOWS TODO. This might be problematic. Consider os.PathSeparator
 		if !strings.HasSuffix(hdr.Name, "/") {
 			// Not the root directory, ensure that the parent directory exists
 			parent := filepath.Dir(hdr.Name)
@@ -567,6 +573,7 @@ func (archiver *Archiver) CopyFileWithTar(src, dst string) (err error) {
 		return fmt.Errorf("Can't copy a directory")
 	}
 	// Clean up the trailing /
+	// JJH WINDOWS TODO. This might be problematic. Consider os.PathSeparator
 	if dst[len(dst)-1] == '/' {
 		dst = path.Join(dst, filepath.Base(src))
 	}

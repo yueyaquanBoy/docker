@@ -80,15 +80,16 @@ func Changes(layers []string, rw string) ([]Change, error) {
 		if err != nil {
 			return err
 		}
-		path = filepath.Join("/", path)
+		path = filepath.Join(string(os.PathSeparator), path)
 
 		// Skip root
-		if path == "/" {
+		if path == string(os.PathSeparator) {
 			return nil
 		}
 
 		// Skip AUFS metadata
-		if matched, err := filepath.Match("/.wh..wh.*", path); err != nil || matched {
+		match := string(os.PathSeparator) + ".wh..wh.*"
+		if matched, err := filepath.Match(match, path); err != nil || matched {
 			return err
 		}
 
@@ -155,7 +156,7 @@ func (root *FileInfo) LookUp(path string) *FileInfo {
 		return root
 	}
 
-	pathElements := strings.Split(path, "/")
+	pathElements := strings.Split(path, string(os.PathSeparator))
 	for _, elem := range pathElements {
 		if elem != "" {
 			child := parent.children[elem]
@@ -170,7 +171,7 @@ func (root *FileInfo) LookUp(path string) *FileInfo {
 
 func (info *FileInfo) path() string {
 	if info.parent == nil {
-		return "/"
+		return string(os.PathSeparator)
 	}
 	return filepath.Join(info.parent.path(), info.name)
 }
@@ -279,7 +280,6 @@ func newRootFileInfo() *FileInfo {
 
 func collectFileInfo(sourceDir string) (*FileInfo, error) {
 	root := newRootFileInfo()
-
 	err := filepath.Walk(sourceDir, func(path string, f os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -290,9 +290,9 @@ func collectFileInfo(sourceDir string) (*FileInfo, error) {
 		if err != nil {
 			return err
 		}
-		relPath = filepath.Join("/", relPath)
+		relPath = filepath.Join(string(os.PathSeparator), relPath)
 
-		if relPath == "/" {
+		if relPath == string(os.PathSeparator) {
 			return nil
 		}
 
