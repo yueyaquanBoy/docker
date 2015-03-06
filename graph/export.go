@@ -5,7 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
@@ -82,7 +82,7 @@ func (s *TagStore) CmdImageExport(job *engine.Job) engine.Status {
 	// write repositories, if there is something to write
 	if len(rootRepoMap) > 0 {
 		rootRepoJson, _ := json.Marshal(rootRepoMap)
-		if err := ioutil.WriteFile(path.Join(tempdir, "repositories"), rootRepoJson, os.FileMode(0644)); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(tempdir, "repositories"), rootRepoJson, os.FileMode(0644)); err != nil {
 			return job.Error(err)
 		}
 	} else {
@@ -106,7 +106,7 @@ func (s *TagStore) CmdImageExport(job *engine.Job) engine.Status {
 func (s *TagStore) exportImage(eng *engine.Engine, name, tempdir string) error {
 	for n := name; n != ""; {
 		// temporary directory
-		tmpImageDir := path.Join(tempdir, n)
+		tmpImageDir := filepath.Join(tempdir, n)
 		if err := os.Mkdir(tmpImageDir, os.FileMode(0755)); err != nil {
 			if os.IsExist(err) {
 				return nil
@@ -117,12 +117,12 @@ func (s *TagStore) exportImage(eng *engine.Engine, name, tempdir string) error {
 		var version = "1.0"
 		var versionBuf = []byte(version)
 
-		if err := ioutil.WriteFile(path.Join(tmpImageDir, "VERSION"), versionBuf, os.FileMode(0644)); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(tmpImageDir, "VERSION"), versionBuf, os.FileMode(0644)); err != nil {
 			return err
 		}
 
 		// serialize json
-		json, err := os.Create(path.Join(tmpImageDir, "json"))
+		json, err := os.Create(filepath.Join(tmpImageDir, "json"))
 		if err != nil {
 			return err
 		}
@@ -134,7 +134,7 @@ func (s *TagStore) exportImage(eng *engine.Engine, name, tempdir string) error {
 		}
 
 		// serialize filesystem
-		fsTar, err := os.Create(path.Join(tmpImageDir, "layer.tar"))
+		fsTar, err := os.Create(filepath.Join(tmpImageDir, "layer.tar"))
 		if err != nil {
 			return err
 		}
