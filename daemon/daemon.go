@@ -5,7 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 
 	"regexp"
 	"strings"
@@ -179,7 +179,7 @@ func (daemon *Daemon) Exists(id string) bool {
 }
 
 func (daemon *Daemon) containerRoot(id string) string {
-	return path.Join(daemon.repository, id)
+	return filepath.Join(daemon.repository, id)
 }
 
 // Load reads the contents of a container from disk
@@ -659,7 +659,7 @@ func (daemon *Daemon) Parents(name string) ([]string, error) {
 }
 
 func (daemon *Daemon) RegisterLink(parent, child *Container, alias string) error {
-	fullName := path.Join(parent.Name, alias)
+	fullName := filepath.Join(parent.Name, alias)
 	if !daemon.containerGraph.Exists(fullName) {
 		_, err := daemon.containerGraph.Set(fullName, child.ID)
 		return err
