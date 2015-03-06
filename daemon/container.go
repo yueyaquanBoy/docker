@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -530,12 +529,12 @@ func (container *Container) Copy(resource string) (io.ReadCloser, error) {
 	}
 	var filter []string
 	if !stat.IsDir() {
-		d, f := path.Split(basePath)
+		d, f := filepath.Split(basePath)
 		basePath = d
 		filter = []string{f}
 	} else {
-		filter = []string{path.Base(basePath)}
-		basePath = path.Dir(basePath)
+		filter = []string{filepath.Base(basePath)}
+		basePath = filepath.Dir(basePath)
 	}
 
 	archive, err := archive.TarWithOptions(basePath, &archive.TarOptions{
