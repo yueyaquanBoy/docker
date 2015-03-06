@@ -3,7 +3,7 @@ package graphdb
 import (
 	"database/sql"
 	"fmt"
-	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -461,7 +461,7 @@ func (db *Database) children(e *Entity, name string, depth int, entities []WalkM
 		meta := WalkMeta{
 			Parent:   e,
 			Entity:   child,
-			FullPath: path.Join(name, edge.Name),
+			FullPath: filepath.Join(name, edge.Name),
 			Edge:     edge,
 		}
 
