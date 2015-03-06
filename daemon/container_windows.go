@@ -57,11 +57,6 @@ func (container *Container) Start() (err error) {
 	return container.waitForStart()
 }
 
-// No-op on Windows. TODO Windows. Factor this out
-func (container *Container) RestoreNetwork() error {
-	return nil
-}
-
 // TODO WINDOWS
 // This can be totally factored out but currently also used in create.go
 func (container *Container) prepareVolumes() error {
