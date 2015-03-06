@@ -3,7 +3,7 @@ package daemon
 import (
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
@@ -28,7 +28,7 @@ func (daemon *Daemon) ContainerRm(job *engine.Job) engine.Status {
 		if err != nil {
 			job.Error(err)
 		}
-		parent, n := path.Split(name)
+		parent, n := filepath..Split(name)
 		if parent == "/" {
 			return job.Errorf("Conflict, cannot remove the default name of the container")
 		}
