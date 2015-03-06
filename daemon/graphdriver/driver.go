@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -96,7 +96,7 @@ func Register(name string, initFunc InitFunc) error {
 
 func GetDriver(name, home string, options []string) (Driver, error) {
 	if initFunc, exists := drivers[name]; exists {
-		return initFunc(path.Join(home, name), options)
+		return initFunc(filepath.Join(home, name), options)
 	}
 	return nil, ErrNotSupported
 }
@@ -139,7 +139,7 @@ func checkPriorDriver(name, root string) {
 	priorDrivers := []string{}
 	for prior := range drivers {
 		if prior != name && prior != "vfs" {
-			if _, err := os.Stat(path.Join(root, prior)); err == nil {
+			if _, err := os.Stat(filepath.Join(root, prior)); err == nil {
 				priorDrivers = append(priorDrivers, prior)
 			}
 		}
