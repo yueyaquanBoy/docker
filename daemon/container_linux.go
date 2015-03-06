@@ -411,7 +411,7 @@ func (container *Container) updateResolvConf(updatedResolvConf []byte, newResolv
 		log.Debugf("replacing %q with updated host resolv.conf", container.ResolvConfPath)
 
 		// for atomic updates to these files, use temporary files with os.Rename:
-		dir := path.Dir(container.ResolvConfPath)
+		dir := filepath.Dir(container.ResolvConfPath)
 		tmpHashFile, err := ioutil.TempFile(dir, "hash")
 		if err != nil {
 			return err
@@ -495,7 +495,7 @@ func (container *Container) initializeNetworking() error {
 
 func (container *Container) setupWorkingDirectory() error {
 	if container.Config.WorkingDir != "" {
-		container.Config.WorkingDir = path.Clean(container.Config.WorkingDir)
+		container.Config.WorkingDir = filepath.Clean(container.Config.WorkingDir)
 
 		pth, err := container.getResourcePath(container.Config.WorkingDir)
 		if err != nil {
@@ -796,7 +796,7 @@ func (container *Container) buildHostsFiles(IP string) error {
 	}
 
 	for linkAlias, child := range children {
-		_, alias := path.Split(linkAlias)
+		_, alias := filepath.Split(linkAlias)
 		// allow access to the linked container via the alias, real name, and container hostname
 		aliasList := alias + " " + child.Config.Hostname
 		// only add the name if alias isn't equal to the name
