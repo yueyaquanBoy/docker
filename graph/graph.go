@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -225,7 +224,7 @@ func (graph *Graph) TempLayerArchive(id string, sf *utils.StreamFormatter, outpu
 
 // Mktemp creates a temporary sub-directory inside the graph's filesystem.
 func (graph *Graph) Mktemp(id string) (string, error) {
-	dir := path.Join(graph.Root, "_tmp", common.GenerateRandomID())
+	dir := filepath.Join(graph.Root, "_tmp", common.GenerateRandomID())
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}
@@ -362,7 +361,7 @@ func (graph *Graph) Heads() (map[string]*image.Image, error) {
 }
 
 func (graph *Graph) ImageRoot(id string) string {
-	return path.Join(graph.Root, id)
+	return filepath.Join(graph.Root, id)
 }
 
 func (graph *Graph) Driver() graphdriver.Driver {
