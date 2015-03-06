@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -275,8 +274,7 @@ func Tar(path string, compression Compression) (io.ReadCloser, error) {
 func escapeName(name string) string {
 	escaped := make([]byte, 0)
 	for i, c := range []byte(name) {
-		// JJH WINDOWS TODO. This might be problematic. os.PathSeparator possibly?
-		if i == 0 && c == '/' {
+		if i == 0 && c == os.PathSeparator {
 			continue
 		}
 		// all printable chars except "-" which is 0x2d
@@ -362,8 +360,7 @@ func TarWithOptions(srcPath string, options *TarOptions) (io.ReadCloser, error) 
 				seen[relFilePath] = true
 
 				// Rename the base resource
-				// JJH WINDOWS TODO: This might be problematic. Consider os.PathSeparator
-				if options.Name != "" && filePath == srcPath+"/"+filepath.Base(relFilePath) {
+				if options.Name != "" && filePath == srcPath+string(os.PathSeparator)+filepath.Base(relFilePath) {
 					renamedRelFilePath = relFilePath
 				}
 				// Set this to make sure the items underneath also get renamed
@@ -422,8 +419,7 @@ loop:
 			}
 		}
 
-		// JJH WINDOWS TODO. This might be problematic. Consider os.PathSeparator
-		if !strings.HasSuffix(hdr.Name, "/") {
+		if !strings.HasSuffix(hdr.Name, string(os.PathSeparator)) {
 			// Not the root directory, ensure that the parent directory exists
 			parent := filepath.Dir(hdr.Name)
 			parentPath := filepath.Join(dest, parent)
@@ -572,10 +568,9 @@ func (archiver *Archiver) CopyFileWithTar(src, dst string) (err error) {
 	if srcSt.IsDir() {
 		return fmt.Errorf("Can't copy a directory")
 	}
-	// Clean up the trailing /
-	// JJH WINDOWS TODO. This might be problematic. Consider os.PathSeparator
-	if dst[len(dst)-1] == '/' {
-		dst = path.Join(dst, filepath.Base(src))
+	// Clean up the trailing / (\ on Windows)
+	if dst[len(dst)-1] == os.PathSeparator {
+		dst = filepath.Join(dst, filepath.Base(src))
 	}
 	// Create the holding directory if necessary
 	if err := os.MkdirAll(filepath.Dir(dst), 0700); err != nil && !os.IsExist(err) {
