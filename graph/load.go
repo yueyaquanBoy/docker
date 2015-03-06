@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
@@ -26,7 +26,7 @@ func (s *TagStore) CmdLoad(job *engine.Job) engine.Status {
 	defer os.RemoveAll(tmpImageDir)
 
 	var (
-		repoDir = path.Join(tmpImageDir, "repo")
+		repoDir = filepath.Join(tmpImageDir, "repo")
 	)
 
 	if err := os.Mkdir(repoDir, os.ModeDir); err != nil {
@@ -59,7 +59,7 @@ func (s *TagStore) CmdLoad(job *engine.Job) engine.Status {
 		}
 	}
 
-	repositoriesJson, err := ioutil.ReadFile(path.Join(tmpImageDir, "repo", "repositories"))
+	repositoriesJson, err := ioutil.ReadFile(filepath.Join(tmpImageDir, "repo", "repositories"))
 	if err == nil {
 		repositories := map[string]Repository{}
 		if err := json.Unmarshal(repositoriesJson, &repositories); err != nil {
@@ -84,13 +84,13 @@ func (s *TagStore) recursiveLoad(eng *engine.Engine, address, tmpImageDir string
 	if err := eng.Job("image_get", address).Run(); err != nil {
 		log.Debugf("Loading %s", address)
 
-		imageJson, err := ioutil.ReadFile(path.Join(tmpImageDir, "repo", address, "json"))
+		imageJson, err := ioutil.ReadFile(filepath.Join(tmpImageDir, "repo", address, "json"))
 		if err != nil {
 			log.Debugf("Error reading json", err)
 			return err
 		}
 
-		layer, err := os.Open(path.Join(tmpImageDir, "repo", address, "layer.tar"))
+		layer, err := os.Open(filepath.Join(tmpImageDir, "repo", address, "layer.tar"))
 		if err != nil {
 			log.Debugf("Error reading embedded tar", err)
 			return err
