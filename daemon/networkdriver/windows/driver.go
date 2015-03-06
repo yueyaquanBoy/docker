@@ -8,6 +8,16 @@ import (
 
 func InitDriver(job *engine.Job) engine.Status {
 	log.Debugln("NetworkDriver-Windows Init()")
+	for name, f := range map[string]engine.Handler{
+		"allocate_interface": Allocate,
+		"release_interface":  Release,
+		"allocate_port":      AllocatePort,
+		"link":               LinkContainers,
+	} {
+		if err := job.Eng.Register(name, f); err != nil {
+			return job.Error(err)
+		}
+	}
 	return engine.StatusOK
 }
 

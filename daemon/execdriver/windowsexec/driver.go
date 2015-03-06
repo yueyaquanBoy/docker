@@ -204,7 +204,7 @@ func (d *driver) GetPidsForContainer(id string) ([]int, error) {
 }
 
 func (d *driver) Clean(id string) error {
-	return fmt.Errorf("windowsexec: Clean() not implemented")
+	return nil
 }
 
 func (d *driver) Stats(id string) (*execdriver.ResourceStats, error) {
