@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -266,7 +265,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 		ci.tmpDir = tmpDirName
 
 		// Create a tmp file within our tmp dir
-		tmpFileName := path.Join(tmpDirName, "tmp")
+		tmpFileName := filepath.Join(tmpDirName, "tmp")
 		tmpFile, err := os.OpenFile(tmpFileName, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			return err
@@ -306,7 +305,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 			return err
 		}
 
-		ci.origPath = path.Join(filepath.Base(tmpDirName), filepath.Base(tmpFileName))
+		ci.origPath = filepath.Join(filepath.Base(tmpDirName), filepath.Base(tmpFileName))
 
 		// If the destination is a directory, figure out the filename.
 		if strings.HasSuffix(ci.destPath, "/") {
@@ -350,7 +349,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 			if fileInfo.Name() == "" {
 				continue
 			}
-			match, _ := path.Match(origPath, fileInfo.Name())
+			match, _ := filepath.Match(origPath, fileInfo.Name())
 			if !match {
 				continue
 			}
@@ -365,7 +364,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 	if err := b.checkPathForAddition(origPath); err != nil {
 		return err
 	}
-	fi, _ := os.Stat(path.Join(b.contextPath, origPath))
+	fi, _ := os.Stat(filepath.Join(b.contextPath, origPath))
 
 	ci := copyInfo{}
 	ci.origPath = origPath
@@ -386,7 +385,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 
 	// Must be a dir
 	var subfiles []string
-	absOrigPath := path.Join(b.contextPath, ci.origPath)
+	absOrigPath := filepath.Join(b.contextPath, ci.origPath)
 
 	// Add a trailing / to make sure we only pick up nested files under
 	// the dir and not sibling files of the dir that just happen to
@@ -399,7 +398,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 	absOrigPathNoSlash := absOrigPath[:len(absOrigPath)-1]
 
 	for _, fileInfo := range b.context.GetSums() {
-		absFile := path.Join(b.contextPath, fileInfo.Name())
+		absFile := filepath.Join(b.contextPath, fileInfo.Name())
 		// Any file in the context that starts with the given path will be
 		// picked up and its hashcode used.  However, we'll exclude the
 		// root dir itself.  We do this for a coupel of reasons:
@@ -597,7 +596,7 @@ func (b *Builder) run(c *daemon.Container) error {
 }
 
 func (b *Builder) checkPathForAddition(orig string) error {
-	origPath := path.Join(b.contextPath, orig)
+	origPath := filepath.Join(b.contextPath, orig)
 	origPath, err := filepath.EvalSymlinks(origPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -621,8 +620,8 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 	var (
 		err        error
 		destExists = true
-		origPath   = path.Join(b.contextPath, orig)
-		destPath   = path.Join(container.RootfsPath(), dest)
+		origPath   = filepath.Join(b.contextPath, orig)
+		destPath   = filepath.Join(container.RootfsPath(), dest)
 	)
 
 	if destPath != container.RootfsPath() {
@@ -676,7 +675,7 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 		}
 	}
 
-	if err := os.MkdirAll(path.Dir(destPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 		return err
 	}
 	if err := chrootarchive.CopyWithTar(origPath, destPath); err != nil {
@@ -685,7 +684,7 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 
 	resPath := destPath
 	if destExists && destStat.IsDir() {
-		resPath = path.Join(destPath, path.Base(origPath))
+		resPath = filepath.Join(destPath, filepath.Base(origPath))
 	}
 
 	return fixPermissions(origPath, resPath, 0, 0, destExists)
@@ -725,7 +724,7 @@ func fixPermissions(source, destination string, uid, gid int, destExisted bool) 
 			return err
 		}
 
-		fullpath = path.Join(destination, cleaned)
+		fullpath = filepath.Join(destination, cleaned)
 		return os.Lchown(fullpath, uid, gid)
 	})
 }
