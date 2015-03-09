@@ -42,7 +42,7 @@ func (config *Config) InstallFlags() {
 
 	flag.StringVar(&config.Pidfile, []string{"p", "-pidfile"}, os.Getenv("temp")+"docker.pid", "Path to use for daemon PID file")
 	flag.StringVar(&config.Root, []string{"g", "-graph"}, os.Getenv("temp")+string(os.PathSeparator)+"docker", "Path to the root of the Docker runtime")
-	flag.StringVar(&config.ExecDriver, []string{"e", "-exec-driver"}, "windows", "Exec driver to use")
+	flag.StringVar(&config.ExecDriver, []string{"e", "-exec-driver"}, "argon", "Exec driver to use")
 
 	flag.BoolVar(&config.AutoRestart, []string{"#r", "#-restart"}, true, "--restart on the daemon has been deprecated in favor of --restart policies on docker run")
 	flag.BoolVar(&config.InterContainerCommunication, []string{"#icc", "-icc"}, true, "Enable inter-container communication")

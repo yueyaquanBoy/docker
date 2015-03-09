@@ -6,15 +6,18 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
-	"github.com/docker/docker/daemon/execdriver/windowsexec"
+	"github.com/docker/docker/daemon/execdriver/argon"
+	"github.com/docker/docker/daemon/execdriver/windowsdummy"
 	"github.com/docker/docker/pkg/sysinfo"
 )
 
 func NewDriver(name, root, initPath string, sysInfo *sysinfo.SysInfo) (execdriver.Driver, error) {
 	log.Debugln("Windows execdriver - NewDriver %s", name)
 	switch name {
-	case "windows":
-		return windowsexec.NewDriver(root, initPath)
+	case "argon":
+		return argon.NewDriver(root, initPath)
+	case "windowdummy":
+		return windowsdummy.NewDriver(root, initPath)
 	}
 	return nil, fmt.Errorf("unknown exec driver %s", name)
 }

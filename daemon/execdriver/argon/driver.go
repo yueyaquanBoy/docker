@@ -1,7 +1,7 @@
 // +build windows
 
-// This is a temporary shell driver only. Needs implementing.
-package windowsexec
+// This is the argon driver
+package argon
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	DriverName = "windowsexec"
+	DriverName = "Windows Containers"
 	Version    = "0.1"
 )
 
