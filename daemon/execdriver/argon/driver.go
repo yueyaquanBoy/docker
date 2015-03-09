@@ -61,9 +61,9 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	cs.pkgs.id = c.ID
 	cs.pkgs.path = c.Rootfs
 
-	a := &computeSystem{
-		sort: "container",
-	}
+	//a := &computeSystem{
+	//	sort: "container",
+	//}
 
 	// Partial implementation. Just runs notepad for now.
 	// TODO Windows

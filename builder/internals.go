@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -158,8 +159,7 @@ func (b *Builder) runContextCommand(args []string, allowRemote bool, allowDecomp
 		return fmt.Errorf("No source files were specified")
 	}
 
-	// Windows TODO: Probably should be using os.pathseparator
-	if len(copyInfos) > 1 && !strings.HasSuffix(dest, "/") {
+	if len(copyInfos) > 1 && !strings.HasSuffix(dest, string(os.PathSeparator)) {
 		return fmt.Errorf("When using %s with more than one source file, the destination must be a directory and end with a /", cmdName)
 	}
 
@@ -221,22 +221,20 @@ func (b *Builder) runContextCommand(args []string, allowRemote bool, allowDecomp
 }
 
 func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath string, destPath string, allowRemote bool, allowDecompression bool) error {
-
-	// Windows TODO: Lots of places where should probably be using os.PathSeparator
-	if origPath != "" && origPath[0] == '/' && len(origPath) > 1 {
+	if origPath != "" && origPath[0] == os.PathSeparator && len(origPath) > 1 {
 		origPath = origPath[1:]
 	}
-	origPath = strings.TrimPrefix(origPath, "./")
+	origPath = strings.TrimPrefix(origPath, "."+string(os.PathSeparator))
 
 	// Twiddle the destPath when its a relative path - meaning, make it
 	// relative to the WORKINGDIR
 	if !filepath.IsAbs(destPath) {
-		hasSlash := strings.HasSuffix(destPath, "/")
-		destPath = filepath.Join("/", b.Config.WorkingDir, destPath)
+		hasSlash := strings.HasSuffix(destPath, string(os.PathSeparator))
+		destPath = filepath.Join(string(os.PathSeparator), b.Config.WorkingDir, destPath)
 
 		// Make sure we preserve any trailing slash
 		if hasSlash {
-			destPath += "/"
+			destPath += string(os.PathSeparator)
 		}
 	}
 
@@ -310,17 +308,16 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 		ci.origPath = filepath.Join(filepath.Base(tmpDirName), filepath.Base(tmpFileName))
 
 		// If the destination is a directory, figure out the filename.
-		// Windows TODO: Several instances where probably should be using os.Pathseparator
-		if strings.HasSuffix(ci.destPath, "/") {
+		if strings.HasSuffix(ci.destPath, string(os.PathSeparator)) {
 			u, err := url.Parse(origPath)
 			if err != nil {
 				return err
 			}
 			path := u.Path
-			if strings.HasSuffix(path, "/") {
+			if strings.HasSuffix(path, string(os.PathSeparator)) {
 				path = path[:len(path)-1]
 			}
-			parts := strings.Split(path, "/")
+			parts := strings.Split(path, string(os.PathSeparator))
 			filename := parts[len(parts)-1]
 			if filename == "" {
 				return fmt.Errorf("cannot determine filename from url: %s", u)
@@ -393,9 +390,8 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 	// Add a trailing / to make sure we only pick up nested files under
 	// the dir and not sibling files of the dir that just happen to
 	// start with the same chars
-	// Windows TODO: Should be using os.Pathseparator
-	if !strings.HasSuffix(absOrigPath, "/") {
-		absOrigPath += "/"
+	if !strings.HasSuffix(absOrigPath, string(os.PathSeparator)) {
+		absOrigPath += string(os.PathSeparator)
 	}
 
 	// Need path w/o / too to find matching dir w/o trailing /
@@ -636,10 +632,9 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 		}
 	}
 
-	// Preserve the trailing '/'
-	// Windows TODO. This probably should be using os.pathseperator
-	if strings.HasSuffix(dest, "/") || dest == "." {
-		destPath = destPath + "/"
+	// Preserve the trailing '/' ('\\ on Windows)
+	if strings.HasSuffix(dest, string(os.PathSeparator)) || dest == "." {
+		destPath = destPath + string(os.PathSeparator)
 	}
 
 	destStat, err := os.Stat(destPath)
@@ -669,8 +664,7 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 		// because tar is very forgiving.  First we need to strip off the archive's
 		// filename from the path but this is only added if it does not end in / .
 		tarDest := destPath
-		// Windows TODO - SHould probably be using os.pathseparator
-		if strings.HasSuffix(tarDest, "/") {
+		if strings.HasSuffix(tarDest, string(os.PathSeparator)) {
 			tarDest = filepath.Dir(destPath)
 		}
 
@@ -732,7 +726,12 @@ func fixPermissions(source, destination string, uid, gid int, destExisted bool) 
 		}
 
 		fullpath = filepath.Join(destination, cleaned)
-		return os.Lchown(fullpath, uid, gid)
+		if runtime.GOOS != "windows" {
+			return os.Lchown(fullpath, uid, gid)
+		} else {
+			// chown not supported on Windows
+			return nil
+		}
 	})
 }
 
