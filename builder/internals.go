@@ -158,6 +158,7 @@ func (b *Builder) runContextCommand(args []string, allowRemote bool, allowDecomp
 		return fmt.Errorf("No source files were specified")
 	}
 
+	// Windows TODO: Probably should be using os.pathseparator
 	if len(copyInfos) > 1 && !strings.HasSuffix(dest, "/") {
 		return fmt.Errorf("When using %s with more than one source file, the destination must be a directory and end with a /", cmdName)
 	}
@@ -221,6 +222,7 @@ func (b *Builder) runContextCommand(args []string, allowRemote bool, allowDecomp
 
 func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath string, destPath string, allowRemote bool, allowDecompression bool) error {
 
+	// Windows TODO: Lots of places where should probably be using os.PathSeparator
 	if origPath != "" && origPath[0] == '/' && len(origPath) > 1 {
 		origPath = origPath[1:]
 	}
@@ -308,6 +310,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 		ci.origPath = filepath.Join(filepath.Base(tmpDirName), filepath.Base(tmpFileName))
 
 		// If the destination is a directory, figure out the filename.
+		// Windows TODO: Several instances where probably should be using os.Pathseparator
 		if strings.HasSuffix(ci.destPath, "/") {
 			u, err := url.Parse(origPath)
 			if err != nil {
@@ -390,6 +393,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 	// Add a trailing / to make sure we only pick up nested files under
 	// the dir and not sibling files of the dir that just happen to
 	// start with the same chars
+	// Windows TODO: Should be using os.Pathseparator
 	if !strings.HasSuffix(absOrigPath, "/") {
 		absOrigPath += "/"
 	}
@@ -422,6 +426,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 func ContainsWildcards(name string) bool {
 	for i := 0; i < len(name); i++ {
 		ch := name[i]
+		// Windows TODO: Should be using os.Pathseparator ? Not sure here.
 		if ch == '\\' {
 			i++
 		} else if ch == '*' || ch == '?' || ch == '[' {
@@ -632,6 +637,7 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 	}
 
 	// Preserve the trailing '/'
+	// Windows TODO. This probably should be using os.pathseperator
 	if strings.HasSuffix(dest, "/") || dest == "." {
 		destPath = destPath + "/"
 	}
@@ -663,6 +669,7 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 		// because tar is very forgiving.  First we need to strip off the archive's
 		// filename from the path but this is only added if it does not end in / .
 		tarDest := destPath
+		// Windows TODO - SHould probably be using os.pathseparator
 		if strings.HasSuffix(tarDest, "/") {
 			tarDest = filepath.Dir(destPath)
 		}

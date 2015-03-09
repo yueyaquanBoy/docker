@@ -30,6 +30,17 @@ type info struct {
 	driver *driver
 }
 
+type packages struct {
+	id   string
+	path string
+}
+
+type computeSystem struct {
+	sort string
+	name string
+	pkgs packages
+}
+
 func NewDriver(root, initPath string) (*driver, error) {
 
 	return &driver{
@@ -43,6 +54,17 @@ func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessCo
 }
 
 func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallback execdriver.StartCallback) (execdriver.ExitStatus, error) {
+
+	var cs computeSystem
+	cs.sort = "Container"
+	cs.name = c.ID
+	cs.pkgs.id = c.ID
+	cs.pkgs.path = c.Rootfs
+
+	a := &computeSystem{
+		sort: "container",
+	}
+
 	// Partial implementation. Just runs notepad for now.
 	// TODO Windows
 	log.Debugln("windowsexec::run c.")
