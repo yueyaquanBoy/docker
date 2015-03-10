@@ -10,6 +10,7 @@ package builder
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -189,7 +190,7 @@ func workdir(b *Builder, args []string, attributes map[string]bool, original str
 	workdir := args[0]
 
 	if !filepath.IsAbs(workdir) {
-		workdir = filepath.Join("/", b.Config.WorkingDir, workdir)
+		workdir = filepath.Join(string(os.PathSeparator), b.Config.WorkingDir, workdir)
 	}
 
 	b.Config.WorkingDir = workdir
