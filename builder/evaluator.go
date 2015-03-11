@@ -181,6 +181,13 @@ func (b *Builder) Run(context io.Reader) (string, error) {
 // Reads a Dockerfile from the current context. It assumes that the
 // 'filename' is a relative path from the root of the context
 func (b *Builder) readDockerfile() error {
+
+	var (
+		filename string      = ""
+		err      error       = nil
+		fi       os.FileInfo = nil
+	)
+
 	// If no -f was specified then look for 'Dockerfile'. If we can't find
 	// that then look for 'dockerfile'.  If neither are found then default
 	// back to 'Dockerfile' and use that in the error message.
@@ -199,7 +206,7 @@ func (b *Builder) readDockerfile() error {
 
 	// Do not perform scope check on Windows. Filename will not be relative here.
 	if runtime.GOOS != "windows" {
-		filename, err := symlink.FollowSymlinkInScope(filepath.Join(b.contextPath, origFile), b.contextPath)
+		filename, err = symlink.FollowSymlinkInScope(filepath.Join(b.contextPath, origFile), b.contextPath)
 		if err != nil {
 			return fmt.Errorf("The Dockerfile (%s) must be within the build context", origFile)
 		}
