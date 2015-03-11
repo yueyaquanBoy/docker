@@ -1,21 +1,15 @@
 package execdriver
 
-// Stefan - Linux imports to sort out here.
-
 import (
 	"encoding/json"
-	"errors"
-	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/daemon/execdriver/native/template"
-	"github.com/docker/docker/pkg/ulimit"
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/cgroups/fs"
 	"github.com/docker/libcontainer/configs"
