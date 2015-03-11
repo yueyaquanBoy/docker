@@ -29,6 +29,9 @@ type Config struct {
 	EnableCors                  bool
 	DisableNetwork              bool
 
+	// TODO Windows. This is not used, needs factoring out
+	CorsHeaders string
+
 	Context      map[string][]string
 	TrustKeyPath string
 	Labels       []string
