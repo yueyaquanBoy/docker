@@ -3,10 +3,10 @@ package execdriver
 import (
 	"errors"
 	"io"
-	"os"
 	"os/exec"
 	"time"
 
+	"github.com/docker/docker/pkg/ulimit"
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/configs"
 )
