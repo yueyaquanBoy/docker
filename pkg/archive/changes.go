@@ -142,15 +142,6 @@ func Changes(layers []string, rw string) ([]Change, error) {
 	return changes, nil
 }
 
-type FileInfo struct {
-	parent     *FileInfo
-	name       string
-	stat       *system.Stat
-	children   map[string]*FileInfo
-	capability []byte
-	added      bool
-}
-
 func (root *FileInfo) LookUp(path string) *FileInfo {
 	parent := root
 	if path == string(os.PathSeparator) {
