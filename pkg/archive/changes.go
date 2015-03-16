@@ -145,7 +145,7 @@ func Changes(layers []string, rw string) ([]Change, error) {
 type FileInfo struct {
 	parent     *FileInfo
 	name       string
-	stat       *system.Stat_t
+	stat       *system.Stat
 	children   map[string]*FileInfo
 	capability []byte
 	added      bool

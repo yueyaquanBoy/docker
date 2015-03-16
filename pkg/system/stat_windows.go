@@ -34,8 +34,3 @@ func (s Stat) ModTime() time.Time {
 func (s Stat) IsDir() bool {
 	return s.isDir
 }
-
-func Stat(path string) (*Stat_t, error) {
-	// should not be called on cli code path
-	return nil, ErrNotSupportedPlatform
-}

@@ -13,7 +13,6 @@ import (
 	"github.com/docker/docker/daemon/execdriver"
 	"github.com/docker/docker/pkg/chrootarchive"
 	"github.com/docker/docker/pkg/symlink"
-	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/volumes"
 )
 

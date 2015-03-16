@@ -75,10 +75,10 @@ func populateCommand(c *Container, env []string) error {
 	pid.HostPid = c.hostConfig.PidMode.IsHost()
 
 	resources := &execdriver.Resources{
-		Memory:     c.Config.Memory,
-		MemorySwap: c.Config.MemorySwap,
-		CpuShares:  c.Config.CpuShares,
-		Cpuset:     c.Config.Cpuset,
+		Memory:     c.hostConfig.Memory,
+		MemorySwap: c.hostConfig.MemorySwap,
+		CpuShares:  c.hostConfig.CpuShares,
+		CpusetCpus: c.hostConfig.CpusetCpus,
 	}
 
 	processConfig := execdriver.ProcessConfig{
