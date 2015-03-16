@@ -3,8 +3,8 @@
 package daemon
 
 import (
+	"github.com/docker/docker/pkg/system"
 	"os"
-	"syscall"
 )
 
 // copyOwnership copies the permissions and uid:gid of the source file
