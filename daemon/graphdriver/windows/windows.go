@@ -10,6 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/chrootarchive"
+	"github.com/docker/docker/pkg/pshell"
 	"github.com/docker/libcontainer/label"
 )
 
@@ -82,6 +83,7 @@ func (d *Driver) Create(id, parent string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %s", parent, err)
 	}
+
 	log.Debugln("Calling chrootarchive.CopyWithTar parentDir", parentDir)
 	log.Debugln("Calling chrootarchive.CopyWithTar dir", dir)
 	if err := chrootarchive.CopyWithTar(parentDir, dir); err != nil {
@@ -101,7 +103,6 @@ func (d *Driver) Remove(id string) error {
 		return err
 	}
 	return os.RemoveAll(d.dir(id))
-
 }
 
 // Return the rootfs path for the id
@@ -125,4 +126,56 @@ func (d *Driver) Put(id string) error {
 func (d *Driver) Cleanup() error {
 	log.Debugln("WindowsGraphDriver Cleanup()")
 	return nil
+}
+
+func CreateAndMountVhd(id string, folder string) error {
+	// This script will create a VHD as a peer of the given folder, then mount
+	// that VHD at the given folder, attempting to clean up if
+	// any part of the process fails. NOTE: the indentation must be spaces
+	// and not tabs, otherwise the powershell invocation will fail.
+	script := `
+    $name = "` + id + `"
+    $folder = "` + folder + `"
+    $path = "$(Split-Path $folder)\$name.vhdx"
+    function throwifnull {
+        if ($args[0] -eq $null){
+            throw
+        }
+    }
+    try {
+        $vhd = New-VHD -Path $path -Dynamic -SizeBytes 20gb
+        throwifnull $vhd
+        $mounted = $vhd | Mount-VHD -Passthru
+        throwifnull $mounted
+        $disk = $mounted | Get-Disk | Initialize-Disk -PassThru
+        throwifnull $disk
+        $partition = $disk | New-Partition -UseMaximumSize
+        throwifnull $partition
+        $volume = $partition | Format-Volume -FileSystem NTFS -NewFileSystemLabel "disk_$name" -Confirm:$false
+        throwifnull $volume
+        mountvol $folder $volume.path
+    }catch{
+        if ($mounted){Dismount-VHD $mounted.Path}
+        if (Test-Path $path){rm $path}
+        throw
+    }
+    `
+
+	log.Debugln("Attempting to create and mount vhdx named '", id, "' at '", folder, "'")
+	_, err := pshell.ExecutePowerShell(script)
+	return err
+}
+
+func DismountVhd(path string) error {
+	// This script will dismount the given VHD.
+	// NOTE: the indentation must be spaces and not tabs, otherwise the
+	// powershell invocation will fail.
+	script := `
+    $path = "` + path + `.vhdx"
+    if(Test-Path $path){Dismount-VHD $path}
+    `
+
+	log.Debugln("Attempting to dismount VHD '", path, ".vhdx'")
+	_, err := pshell.ExecutePowerShell(script)
+	return err
 }
