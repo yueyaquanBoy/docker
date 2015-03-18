@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/graph"
@@ -42,6 +43,16 @@ func (daemon *Daemon) ContainerCreate(job *engine.Job) engine.Status {
 	// TODO WINDOWS This needs work
 	if hostConfig.Memory == 0 && hostConfig.MemorySwap > 0 {
 		return job.Errorf("You should always set the Memory limit when using Memoryswap limit, see usage.\n")
+	}
+
+	// The check for a valid workdir path is made on the server rather than in the
+	// client. This is because we don't know the type of path (Linux or Windows)
+	// to validate on the client. Note that this path is called on both docker run
+	// and docker create calls from the client. For docker run, it is the first command
+	// sent to the server. Docker run and docker create are the only two CLI commands
+	// which take a workdir parameter.
+	if config.WorkingDir != "" && !filepath.IsAbs(config.WorkingDir) {
+		return job.Errorf("The working directory is invalid. It needs to be an absolute path.")
 	}
 
 	container, buildWarnings, err := daemon.Create(config, hostConfig, name)
