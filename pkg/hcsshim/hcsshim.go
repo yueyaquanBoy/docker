@@ -15,10 +15,11 @@ import (
 const (
 	SHIMDLL = "vmcompute.dll"
 
-	PROCCREATE    = "CreateComputeSystem"
-	PROCSTART     = "StartComputeSystem"
-	PROCTERMINATE = "TerminateComputeSystem"
-	PROCEXECUTE   = "ExecuteInComputeSystem"
+	PROCCREATE       = "CreateComputeSystem"
+	PROCSTART        = "StartComputeSystem"
+	PROCTERMINATE    = "TerminateComputeSystem"
+	PROCRUNANDWAIT   = "ExecuteInComputeSystem"
+	PROCRUNANDRETURN = "ContainerStartProcess"
 )
 
 var (
@@ -191,10 +192,13 @@ func ChangeState(ID string, newState int) error {
 	return nil
 } // ChangeState
 
-func Execute(ID string, CommandLine string, StdDevices Devices) (ExitCode uint32, err error) {
-	//func ExecuteInComputeSystem(ID string, CommandLine string, StdDevices Devices)	(ExitCode uint32, err error)
+// RunAndWait runs a command inside a Windows container and waits for
+// it to complete. The exit code of the command/process is returned back.
+// It is possible to interact by passing named pipes through the devices
+// parameter (eg docker run -a stdin -a stdout -a stderr -i container command)
+func RunAndWait(ID string, CommandLine string, StdDevices Devices) (ExitCode uint32, err error) {
 
-	log.Debugln("hcsshim::Execute")
+	log.Debugln("hcsshim::RunAndWait")
 	log.Debugln("ID:", ID)
 	log.Debugln("CommandLine:", CommandLine)
 
@@ -212,7 +216,7 @@ func Execute(ID string, CommandLine string, StdDevices Devices) (ExitCode uint32
 	)
 
 	// Load the DLL and get the ExecuteInComputeSystem function
-	dll, proc, err = loadAndFind(PROCEXECUTE)
+	dll, proc, err = loadAndFind(PROCRUNANDWAIT)
 
 	// Release once used if we managed to get a handle to it
 	if dll != nil {
@@ -281,12 +285,12 @@ func Execute(ID string, CommandLine string, StdDevices Devices) (ExitCode uint32
 	// Check the result codes first
 	if r1 != 0 || r2 != 0 {
 		log.Debugln("r1 ", r1)
-		return 0, errors.New(PROCEXECUTE + " failed r1/r2 check")
+		return 0, errors.New(PROCRUNANDWAIT + " failed r1/r2 check")
 	}
 
 	// Check for error itself next
 	if err != nil {
-		return 0, errors.New(PROCEXECUTE + " failed. " + err.Error())
+		return 0, errors.New(PROCRUNANDWAIT + " failed. " + err.Error())
 	}
 
 	if ec != nil {
@@ -294,7 +298,84 @@ func Execute(ID string, CommandLine string, StdDevices Devices) (ExitCode uint32
 	}
 
 	return *ec, nil
-} // Execute
+} // RunAndWait
+
+// RunAndWait runs a command inside a Windows container and waits for
+// it to complete. The exit code of the command/process is returned back.
+// It is possible to interact by passing named pipes through the devices
+// parameter (eg docker run -a stdin -a stdout -a stderr -i container command)
+func RunAndReturn(ID string, CommandLine string) (PID uint32, err error) {
+
+	log.Debugln("hcsshim::RunAndReturn")
+	log.Debugln("ID:", ID)
+	log.Debugln("CommandLine:", CommandLine)
+
+	var (
+		// To pass into syscall, we need uint16 pointers to the strings
+		IDp          *uint16
+		CommandLinep *uint16
+
+		// Result values from calling the procedure
+		r1, r2 uintptr
+
+		// The DLL and procedure in the DLL respectively
+		dll  *syscall.DLL
+		proc *syscall.Proc
+	)
+
+	// Load the DLL and get the ContainerStartProcess function
+	dll, proc, err = loadAndFind(PROCRUNANDRETURN)
+
+	// Release once used if we managed to get a handle to it
+	if dll != nil {
+		defer dll.Release()
+	}
+
+	// Check for error from loadAndFind
+	if err != nil {
+		return 0, err
+	}
+
+	// Convert ID to uint16 pointer for calling the procedure
+	IDp, err = syscall.UTF16PtrFromString(ID)
+	if err != nil {
+		log.Debugln("Failed conversion of ID to pointer ", err)
+		return 0, err
+	}
+
+	// Convert CommandLine to uint16 pointer for calling the procedure
+	CommandLinep, err = syscall.UTF16PtrFromString(CommandLine)
+	if err != nil {
+		log.Debugln("Failed conversion of CommandLine to pointer ", err)
+		return 0, err
+	}
+
+	// To get a POINTER to the PID
+	pid := new(uint32)
+
+	// Call the procedure itself.
+	r1, r2, err = proc.Call(
+		uintptr(unsafe.Pointer(IDp)),
+		uintptr(unsafe.Pointer(CommandLinep)),
+		uintptr(unsafe.Pointer(pid)))
+
+	// Check the result codes first
+	if r1 != 0 || r2 != 0 {
+		log.Debugln("r1 ", r1)
+		return 0, errors.New(PROCRUNANDRETURN + " failed r1/r2 check")
+	}
+
+	// Check for error itself next
+	if err != nil {
+		return 0, errors.New(PROCRUNANDRETURN + " failed. " + err.Error())
+	}
+
+	if pid != nil {
+		log.Debugln("hcsshim::ContainerStartProcess PID ", *pid)
+	}
+
+	return *pid, nil
+} // RunAndReturn
 
 func loadAndFind(Procedure string) (dll *syscall.DLL, proc *syscall.Proc, err error) {
 
