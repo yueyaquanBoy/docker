@@ -57,7 +57,6 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	// cmd.exe is a good a thing as any to fire up for now
 	params := []string{
 		"notepad",
-		"c:/users/jhoward/documents/a.a",
 	}
 
 	var (
