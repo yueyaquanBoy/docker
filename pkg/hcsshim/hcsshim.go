@@ -113,7 +113,9 @@ func Create(ID string, Configuration string) error {
 
 	// Check for error itself next
 	if err != nil {
-		return errors.New(PROCCREATE + " failed. " + err.Error())
+		if err.Error() != "The operation completed successfully." {
+			return errors.New(PROCCREATE + " failed. " + err.Error())
+		}
 	}
 
 	return nil
@@ -186,7 +188,9 @@ func ChangeState(ID string, newState int) error {
 
 	// Check for error itself next
 	if err != nil {
-		return errors.New(procname + " failed. " + err.Error())
+		if err.Error() != "The operation completed successfully." {
+			return errors.New(procname + " failed. " + err.Error())
+		}
 	}
 
 	return nil
@@ -290,7 +294,9 @@ func RunAndWait(ID string, CommandLine string, StdDevices Devices) (ExitCode uin
 
 	// Check for error itself next
 	if err != nil {
-		return 0, errors.New(PROCRUNANDWAIT + " failed. " + err.Error())
+		if err.Error() != "The operation completed successfully." {
+			return 0, errors.New(PROCRUNANDWAIT + " failed. " + err.Error())
+		}
 	}
 
 	if ec != nil {
@@ -384,6 +390,12 @@ func loadAndFind(Procedure string) (dll *syscall.DLL, proc *syscall.Proc, err er
 	dll, err = syscall.LoadDLL(SHIMDLL)
 	if err != nil {
 		log.Debugln("Failed to load ", SHIMDLL, err)
+		return nil, nil, err
+	}
+
+	proc, err = dll.FindProc(Procedure)
+	if err != nil {
+		log.Debugln("Failed to find " + Procedure + " in " + SHIMDLL)
 		return nil, nil, err
 	}
 

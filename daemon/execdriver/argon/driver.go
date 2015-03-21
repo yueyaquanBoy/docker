@@ -6,18 +6,17 @@ package argon
 import (
 	"errors"
 	"fmt"
-	"os/exec"
-	"time"
+	"io"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
 	"github.com/docker/docker/pkg/hcsshim"
-	_ "gopkg.in/natefinch/npipe.v2"
+	"gopkg.in/natefinch/npipe.v2"
 )
 
 const (
 	DriverName = "1854"
-	Version    = "0.1"
+	Version    = "20-Mar-2015"
 )
 
 type driver struct {
@@ -113,25 +112,56 @@ func checkSupportedOptions(c *execdriver.Command) error {
 
 }
 
+func stdinAccept(inListen *npipe.PipeListener, pipeName string, copyfrom io.ReadCloser) {
+
+	// Wait for the pipe to be connected to by the shim
+	log.Debugln("Waiting on ", pipeName)
+	stdinConn, err := inListen.Accept()
+	if err != nil {
+		log.Debugln(pipeName, err)
+		return
+	}
+	log.Debugln("Connected to ", stdinConn.RemoteAddr())
+
+	// Anything that comes from the client stdin should be copied
+	// across to the stdin named pipe of the Windows container.
+	go func() {
+		defer stdinConn.Close()
+		io.Copy(stdinConn, copyfrom)
+	}()
+}
+
+func stdouterrAccept(outerrListen *npipe.PipeListener, pipeName string) {
+
+	// Wait for the pipe to be connected to by the shim
+	log.Debugln("Waiting on ", pipeName)
+	for {
+		outerrConn, err := outerrListen.Accept()
+		if err != nil {
+			log.Debugln(pipeName, err)
+			return
+
+		}
+		log.Debugln("Connected to ", outerrConn.RemoteAddr())
+	}
+	// BUGBUG We need to pass this in so we can set it: c.ProcessConfig.Cmd.Stdout = stdoutConn
+}
+
 func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallback execdriver.StartCallback) (execdriver.ExitStatus, error) {
 
-	// JJH Wherever pipes is set on call in, need to actually
-	// create 3 named pipes first.
+	log.Debugln("argon::run c.")
+	log.Debugln(" - ID            : ", c.ID)
+	log.Debugln(" - RootFs        : ", c.Rootfs)
+	log.Debugln(" - InitPath      : ", c.InitPath)
+	log.Debugln(" - WorkingDir    : ", c.WorkingDir)
+	log.Debugln(" - ConfigPath    : ", c.ConfigPath)
+	log.Debugln(" - ProcessLabel  : ", c.ProcessLabel)
 
 	var (
-		term execdriver.Terminal
-		//devices hcsshim.Devices
+		// term execdriver.Terminal   Commented out for now.
+		err                            error
+		inListen, outListen, errListen *npipe.PipeListener
 	)
-
-	hcsshim.ChangeState("12345", hcsshim.Start)
-
-	term, err := execdriver.NewStdConsole(&c.ProcessConfig, pipes)
-	c.ProcessConfig.Terminal = term
-
-	// Keep this block of code -- it at least compiles.
-	//l := npipe.PipeConn{}
-	//pipes.Stdout = &l
-	//pipes.Stdin = &l
 
 	// Make sure the client isn't asking for options which aren't supported
 	// by Windows containers.
@@ -140,152 +170,120 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
-	// Partial implementation. Just runs notepad for now.
-	// TODO Windows
-	log.Debugln("windowsexec::run c.")
-	log.Debugln(" - ID            : ", c.ID)
-	log.Debugln(" - RootFs        : ", c.Rootfs)
-	log.Debugln(" - InitPath      : ", c.InitPath)
-	log.Debugln(" - WorkingDir    : ", c.WorkingDir)
-	log.Debugln(" - ConfigPath    : ", c.ConfigPath)
-	log.Debugln(" - ProcessLabel  : ", c.ProcessLabel)
+	// For device redirection passed into the shim layer.
+	stdDevices := hcsshim.Devices{}
 
-	// cmd.exe is a good a thing as any to fire up for now
-	//	params := []string{
-	//		"notepad",
-	//		"c:/users/jhoward/documents/a.a",
-	//	}
+	// Connect stdin
+	if pipes.Stdin != nil {
 
-	params := []string{
-		"notepad",
+		log.Debugln(pipes.Stdin)
+		log.Debugln(c.ProcessConfig.Cmd.Stdin)
+
+		stdDevices.StdInPipe = `\\.\pipe\docker\` + c.ID + "-stdin"
+
+		// Listen on the named pipe
+		inListen, err = npipe.Listen(stdDevices.StdInPipe)
+		if err != nil {
+			log.Debugln("Failed to listen on ", stdDevices.StdInPipe, err)
+			return execdriver.ExitStatus{ExitCode: -1}, err
+		}
+		defer inListen.Close()
+
+		// Launch a goroutine to do the accept. We do this so that we can
+		// cause an otherwise blocking goroutine to gracefully close when
+		// the caller (us) closes the listener
+		go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
+
+		// TODO There's probably the same c.ProcessConfig.Cmd.Stdin = stdinConn
 	}
 
-	// docker run -a stdin -a stdout -a stderr -i cirros echo hello
-	//params := []string{
-	//	"c:/windows/system32/cmd.exe",
-	//}
+	//	log.Debugln("JJH Address: ", inListen == nil)
 
-	var (
-		name = params[0]
-		arg  = params[1:]
-	)
-	log.Debugln("name", name)
-	log.Debugln("arg", arg)
+	// Connect stdout
+	if pipes.Stdout != nil {
+		// TODO c.ProcessConfig.Cmd.Stdout = stdoutConn
+		stdDevices.StdOutPipe = `\\.\pipe\docker\` + c.ID + "-stdout"
+		outListen, err = npipe.Listen(stdDevices.StdOutPipe)
+		if err != nil {
+			log.Debugln("Failed to listen on ", stdDevices.StdOutPipe, err)
+			return execdriver.ExitStatus{ExitCode: -1}, err
+		}
+		defer outListen.Close()
+		go stdouterrAccept(outListen, stdDevices.StdOutPipe)
+	}
 
-	// OK, at this point, need to create 3 pipes
+	// Connect stderr
+	if pipes.Stderr != nil {
+		// TODO c.ProcessConfig.Cmd.Stderr = stderrConn
+		stdDevices.StdErrPipe = `\\.\pipe\docker\` + c.ID + "-stderr"
+		errListen, err = npipe.Listen(stdDevices.StdErrPipe)
+		if err != nil {
+			log.Debugln("Failed to listen on ", stdDevices.StdErrPipe, err)
+			return execdriver.ExitStatus{ExitCode: -1}, err
+		}
+		defer errListen.Close()
+		go stdouterrAccept(errListen, stdDevices.StdErrPipe)
+	}
 
-	aname, err := exec.LookPath(name)
+	// Temporarily create a dummy container with the ID
+	configuration := `{` + "\n"
+	configuration += ` "SystemType" : "Container",` + "\n"
+	configuration += ` "Name" : "test2",` + "\n"
+	configuration += ` "RootDevicePath" : "C:\\Containers\\test",` + "\n"
+	configuration += ` "IsDummy" : true` + "\n"
+	configuration += `}` + "\n"
+	err = hcsshim.Create(c.ID, configuration)
 	if err != nil {
-		log.Debugln("Error returned from exec.LookPath", name, err)
-		aname = name
-	}
-	c.ProcessConfig.Path = aname
-	c.ProcessConfig.Args = append([]string{name}, arg...)
-
-	log.Debugln("windowsexec::run c.ProcessConfig")
-	log.Debugln(" - Path          : ", c.ProcessConfig.Path)
-	log.Debugln(" - Args          : ", c.ProcessConfig.Args)
-	log.Debugln(" - Env           : ", c.ProcessConfig.Env)
-	log.Debugln(" - Dir           : ", c.ProcessConfig.Dir)
-
-	if err := c.ProcessConfig.Start(); err != nil {
-		log.Debugln("ProcessConfig.Start() failed ", err)
+		log.Debugln("Failed to create temporary container ", err)
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
-	var (
-		waitErr  error
-		waitLock = make(chan struct{})
-	)
-
-	go func() {
-		if err := c.ProcessConfig.Wait(); err != nil {
-			if _, ok := err.(*exec.ExitError); !ok { // Do not propagate the error if it's simply a status code != 0
-				waitErr = err
-			}
-		}
-		close(waitLock)
-	}()
-
-	// Poll for RUNNING status
-	pid, err := d.waitForStart(c, waitLock)
+	// Start the container
+	log.Debugln("Starting container ", c.ID)
+	err = hcsshim.ChangeState(c.ID, hcsshim.Start)
 	if err != nil {
-		if c.ProcessConfig.Process != nil {
-			c.ProcessConfig.Process.Kill()
-			c.ProcessConfig.Wait()
-		}
+		log.Debugln("Failed to start ", err)
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
-	// JJH For now, get the pid out of the ProcessConfig object.
-	c.ContainerPid = c.ProcessConfig.Process.Pid
-	pid = c.ProcessConfig.Process.Pid
+	// Run the command and wait for it to complete.
+	// TODO Windows. Under what circumstances do we not wait and just get the pid out>?
+	var exitCode uint32
+	exitCode, err = hcsshim.RunAndWait(c.ID, "cmd.exe", stdDevices)
+	if err != nil {
+		log.Debugln("RunAndWait() failed ", err)
+		return execdriver.ExitStatus{ExitCode: -1}, err
+	}
+	log.Debugln("Exit code ", exitCode)
 
-	log.Debugln("PID of 'container' is ", c.ContainerPid)
+	// TODO: Still not sure if I need this? JJH 3/20/15
+	//term, err = execdriver.NewStdConsole(&c.ProcessConfig, pipes)
+	//c.ProcessConfig.Terminal = term
 
 	if startCallback != nil {
+		pid := 12345
 		startCallback(&c.ProcessConfig, pid)
 	}
-
-	<-waitLock
 
 	return execdriver.ExitStatus{ExitCode: 0}, nil
 }
 
-// wait for the process to start and return the pid for the process
-func (d *driver) waitForStart(c *execdriver.Command, waitLock chan struct{}) (int, error) {
-	var (
-		err error
-		//output []byte
-	)
-	// We wait for the container to be fully running.
-	// Timeout after 5 seconds. In case of broken pipe, just retry.
-	// Note: The container can run and finish correctly before
-	// the end of this loop
-	for now := time.Now(); time.Since(now) < 5*time.Second; {
-		select {
-		case <-waitLock:
-			// If the process dies while waiting for it, just return
-			return -1, nil
-		default:
-		}
-
-		//output, err = d.getInfo(c.ID)
-		if err == nil {
-			//info, err := parseLxcInfo(string(output))
-			//if err != nil {
-			//	return -1, err
-			//}
-			//if info.Running {
-			// Windows - for now, pretend it is running
-			return 56789, nil
-			//}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	return -1, execdriver.ErrNotRunning
-}
-
 func (d *driver) Kill(p *execdriver.Command, sig int) error {
 
-	// JJH Hacked together. Just kill the PID we spawned
-	log.Debugln("Kill() pid=", p.ProcessConfig.Process.Pid)
-	log.Debugln("Kill() sig=", sig)
-
-	err := p.ProcessConfig.Process.Kill()
-	return err
+	//TODO Windows. Need to call shim driver killing p.ID
+	log.Debugln("Kill() ", p.ID)
+	return nil
 }
 
 func (d *driver) Pause(c *execdriver.Command) error {
-	return fmt.Errorf("windowsexec: Pause() not implemented but would pause PID %d", c.ProcessConfig.Process.Pid)
+	return fmt.Errorf("Windows containers cannot be paused")
 }
 
 func (d *driver) Unpause(c *execdriver.Command) error {
-	return fmt.Errorf("windowsexec: Pause() not implemented but would Unpause PID %d", c.ProcessConfig.Process.Pid)
+	return fmt.Errorf("Windows containers cannot be paused")
 }
 
 func (d *driver) Terminate(p *execdriver.Command) error {
-	//return Kill(p,9)
 	return fmt.Errorf("windowsexec: Terminate() not implemented")
 }
 
@@ -315,5 +313,5 @@ func (d *driver) Clean(id string) error {
 }
 
 func (d *driver) Stats(id string) (*execdriver.ResourceStats, error) {
-	return nil, fmt.Errorf("windowsexec: Stats() not implemented")
+	return nil, fmt.Errorf("Stats() not implemented")
 }
