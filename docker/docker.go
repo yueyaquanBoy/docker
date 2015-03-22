@@ -32,7 +32,7 @@ func main() {
 	}
 
 	// Set terminal emulation based on platform as required.
-	stdout, stderr, stdin := term.StdStreams()
+	stdin, stdout, stderr := term.StdStreams()
 
 	initLogging(stderr)
 
