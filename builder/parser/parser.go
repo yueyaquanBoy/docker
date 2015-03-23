@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/builder/command"
 )
 
@@ -32,10 +33,9 @@ type Node struct {
 }
 
 var (
-	dispatch                map[string]func(string) (*Node, map[string]bool, error)
-	TOKEN_WHITESPACE        = regexp.MustCompile(`[\t\v\f\r ]+`)
-	TOKEN_LINE_CONTINUATION = regexp.MustCompile(`\\[ \t]*$`)
-	TOKEN_COMMENT           = regexp.MustCompile(`^#.*$`)
+	dispatch         map[string]func(string) (*Node, map[string]bool, error)
+	TOKEN_WHITESPACE = regexp.MustCompile(`[\t\v\f\r ]+`)
+	TOKEN_COMMENT    = regexp.MustCompile(`^#.*$`)
 )
 
 func init() {
@@ -66,11 +66,13 @@ func init() {
 // parse a line and return the remainder.
 func parseLine(line string) (string, *Node, error) {
 	if line = stripComments(line); line == "" {
+
 		return "", nil, nil
 	}
 
 	if TOKEN_LINE_CONTINUATION.MatchString(line) {
 		line = TOKEN_LINE_CONTINUATION.ReplaceAllString(line, "")
+		log.Debugln("Continuation: Updated to ", line)
 		return line, nil, nil
 	}
 
