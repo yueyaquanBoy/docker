@@ -12,11 +12,11 @@ import (
 )
 
 func NewDriver(name, root, initPath string, sysInfo *sysinfo.SysInfo) (execdriver.Driver, error) {
-	log.Debugln("Windows execdriver - NewDriver %s", name)
+	log.Debugln("Windows execdriver - NewDriver ", name)
 	switch name {
 	case "argon":
 		return argon.NewDriver(root, initPath)
-	case "windowdummy":
+	case "windowsdummy":
 		return windowsdummy.NewDriver(root, initPath)
 	}
 	return nil, fmt.Errorf("unknown exec driver %s", name)

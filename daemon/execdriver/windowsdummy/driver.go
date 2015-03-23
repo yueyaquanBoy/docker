@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	DriverName = "windowsexec"
+	DriverName = "windowsdummy"
 	Version    = "0.1"
 )
 
