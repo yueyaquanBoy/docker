@@ -188,12 +188,15 @@ func workdir(b *Builder, args []string, attributes map[string]bool, original str
 	}
 
 	workdir := args[0]
+	log.Debugln("workdir: ", workdir)
 
 	if !filepath.IsAbs(workdir) {
+		log.Debugln("workdir is not absolute")
 		workdir = filepath.Join(string(os.PathSeparator), b.Config.WorkingDir, workdir)
 	}
 
 	b.Config.WorkingDir = workdir
+	log.Debugln("workdir is ", workdir)
 
 	return b.commit("", b.Config.Cmd, fmt.Sprintf("WORKDIR %v", workdir))
 }
