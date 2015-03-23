@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -190,7 +191,23 @@ func workdir(b *Builder, args []string, attributes map[string]bool, original str
 	workdir := args[0]
 	log.Debugln("workdir: ", workdir)
 
-	if !filepath.IsAbs(workdir) {
+	// We do different processing on Windows to what would be expected to solve
+	// an interesting problem. Generally on Windows, an absolute path would
+	// be something like c:\windows\system. However, in a Dockerfile, an
+	// absolute path on Windows would be absolute relative to the image. Hence
+	// \windows\system32 with no drive letters. Hence we can't use filepath.
+	// IsAbs to determine "absoluteness". Note that we (hesitantly correctly)
+	// check for both forward and back slashes as this is what the Go implementation
+	// if IsAbs() does in the "isSlash()" function.
+
+	isAbs := false
+	if runtime.GOOS == "windows" {
+		isAbs = workdir[0] == '\\' || workdir[0] == '/'
+	} else {
+		isAbs = filepath.IsAbs(workdir)
+	}
+
+	if !isAbs {
 		log.Debugln("workdir is not absolute")
 		workdir = filepath.Join(string(os.PathSeparator), b.Config.WorkingDir, workdir)
 	}
