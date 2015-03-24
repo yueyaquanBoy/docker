@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -497,6 +498,10 @@ func (s *TagStore) CmdPush(job *engine.Job) engine.Status {
 		authConfig  = &registry.AuthConfig{}
 		metaHeaders map[string][]string
 	)
+
+	if runtime.GOOS == "windows" {
+		return job.Error(errors.New("Windows: Push is disabled, sorry. CmdPush()"))
+	}
 
 	// Resolve the Repository name from fqn to RepositoryInfo
 	repoInfo, err := registry.ResolveRepositoryInfo(job, localName)
