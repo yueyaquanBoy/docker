@@ -15,11 +15,11 @@ import (
 const (
 	SHIMDLL = "vmcompute.dll"
 
-	PROCCREATE       = "CreateComputeSystem"
-	PROCSTART        = "StartComputeSystem"
-	PROCTERMINATE    = "TerminateComputeSystem"
-	PROCRUNANDWAIT   = "ExecuteInComputeSystem"
-	PROCRUNANDRETURN = "ContainerStartProcess"
+	PROCCREATE                       = "CreateComputeSystem"
+	PROCSTART                        = "StartComputeSystem"
+	PROCTERMINATE                    = "TerminateComputeSystem"
+	PROCRUNANDWAIT                   = "ExecuteInComputeSystem"
+	PROCCREATEPROCESSINCOMPUTESYSTEM = "CreateProcessInComputeSystem"
 )
 
 var (
@@ -306,13 +306,9 @@ func RunAndWait(ID string, CommandLine string, StdDevices Devices) (ExitCode uin
 	return *ec, nil
 } // RunAndWait
 
-// RunAndWait runs a command inside a Windows container and waits for
-// it to complete. The exit code of the command/process is returned back.
-// It is possible to interact by passing named pipes through the devices
-// parameter (eg docker run -a stdin -a stdout -a stderr -i container command)
-func RunAndReturn(ID string, CommandLine string) (PID uint32, err error) {
+func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devices) (PID uint32, err error) {
 
-	log.Debugln("hcsshim::RunAndReturn")
+	log.Debugln("hcsshim::CreateProcessInComputeSystem")
 	log.Debugln("ID:", ID)
 	log.Debugln("CommandLine:", CommandLine)
 
@@ -329,8 +325,8 @@ func RunAndReturn(ID string, CommandLine string) (PID uint32, err error) {
 		proc *syscall.Proc
 	)
 
-	// Load the DLL and get the ContainerStartProcess function
-	dll, proc, err = loadAndFind(PROCRUNANDRETURN)
+	// Load the DLL and get the CreateProcessInComputeSystem function
+	dll, proc, err = loadAndFind(PROCCREATEPROCESSINCOMPUTESYSTEM)
 
 	// Release once used if we managed to get a handle to it
 	if dll != nil {
@@ -356,6 +352,36 @@ func RunAndReturn(ID string, CommandLine string) (PID uint32, err error) {
 		return 0, err
 	}
 
+	// Need an instance of the redirection devices for internal use when calling the procedure
+	internalDevices := new(deviceInt)
+
+	// Convert stdin, if supplied to uint16 pointer for calling the procedure
+	if len(StdDevices.StdInPipe) != 0 {
+		internalDevices.stdinpipe, err = syscall.UTF16PtrFromString(StdDevices.StdInPipe)
+		if err != nil {
+			log.Debugln("Failed conversion of StdInPipe to pointer ", err)
+			return 0, err
+		}
+	}
+
+	// Convert stdout, if supplied to uint16 pointer for calling the procedure
+	if len(StdDevices.StdOutPipe) != 0 {
+		internalDevices.stdoutpipe, err = syscall.UTF16PtrFromString(StdDevices.StdOutPipe)
+		if err != nil {
+			log.Debugln("Failed conversion of StdOutPipe to pointer ", err)
+			return 0, err
+		}
+	}
+
+	// Convert stderr, if supplied to uint16 pointer for calling the procedure
+	if len(StdDevices.StdErrPipe) != 0 {
+		internalDevices.stderrpipe, err = syscall.UTF16PtrFromString(StdDevices.StdErrPipe)
+		if err != nil {
+			log.Debugln("Failed conversion of StdErrPipe to pointer ", err)
+			return 0, err
+		}
+	}
+
 	// To get a POINTER to the PID
 	pid := new(uint32)
 
@@ -363,25 +389,28 @@ func RunAndReturn(ID string, CommandLine string) (PID uint32, err error) {
 	r1, r2, err = proc.Call(
 		uintptr(unsafe.Pointer(IDp)),
 		uintptr(unsafe.Pointer(CommandLinep)),
+		uintptr(unsafe.Pointer(internalDevices)),
 		uintptr(unsafe.Pointer(pid)))
 
 	// Check the result codes first
 	if r1 != 0 || r2 != 0 {
 		log.Debugln("r1 ", r1)
-		return 0, errors.New(PROCRUNANDRETURN + " failed r1/r2 check")
+		return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " failed r1/r2 check")
 	}
 
 	// Check for error itself next
 	if err != nil {
-		return 0, errors.New(PROCRUNANDRETURN + " failed. " + err.Error())
+		if err.Error() != "The operation completed successfully." {
+			return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " failed. " + err.Error())
+		}
 	}
 
 	if pid != nil {
-		log.Debugln("hcsshim::ContainerStartProcess PID ", *pid)
+		log.Debugln("hcsshim::CreateProcessInComputeSystem PID ", *pid)
 	}
 
 	return *pid, nil
-} // RunAndReturn
+} // CreateProcessInComputeSystem
 
 func loadAndFind(Procedure string) (dll *syscall.DLL, proc *syscall.Proc, err error) {
 

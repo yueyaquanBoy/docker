@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	//"syscall"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
@@ -16,7 +18,7 @@ import (
 
 const (
 	DriverName = "1854"
-	Version    = "20-Mar-2015"
+	Version    = "24-Mar-2015"
 )
 
 type driver struct {
@@ -112,6 +114,19 @@ func checkSupportedOptions(c *execdriver.Command) error {
 
 }
 
+// This runs as a go function. It waits for the Windows container system
+// to accept our offer of a named pipe for stdin. Once accepted, if we are
+// running "attached" to the container (eg docker run -i), then we spin up
+// a further thread to copy anything from the client into the container.
+//
+// Important design note. This function is run as a go function for a very
+// good reason. The named pipe Accept call is blocking until one of two things
+// happen. Either someone connects to it, or it is forcibly closed.
+//
+// Let's assume that no-one connects to it, the only way otherwise the Run()
+// method would continue is by closing it. However, as that would be the same
+// thread, it can't close it. Hence we run as another thread allowing Run()
+// to close the named pipe.
 func stdinAccept(inListen *npipe.PipeListener, pipeName string, copyfrom io.ReadCloser) {
 
 	// Wait for the pipe to be connected to by the shim
@@ -125,25 +140,46 @@ func stdinAccept(inListen *npipe.PipeListener, pipeName string, copyfrom io.Read
 
 	// Anything that comes from the client stdin should be copied
 	// across to the stdin named pipe of the Windows container.
-	go func() {
-		defer stdinConn.Close()
-		io.Copy(stdinConn, copyfrom)
-	}()
+	if copyfrom != nil {
+		go func() {
+			defer stdinConn.Close()
+			log.Debugln("Calling io.Copy on stdin")
+			bytes, err := io.Copy(stdinConn, copyfrom)
+			log.Debugln("Finished io.Copy on stdin bytes/err:", bytes, err)
+		}()
+	}
 }
 
-func stdouterrAccept(outerrListen *npipe.PipeListener, pipeName string) {
+// This runs as a go function. It waits for the Windows container system to
+// accept our offer of a named pipe - in fact two of them - one for stdout
+// and one for stderr (we are called twice). Once the named pipe is accepted,
+// if we are running "attached" to the container (eg docker run -i), then we
+// spin up a further thread to copy anything from the containers output channels
+// to the client.
+func stdouterrAccept(outerrListen *npipe.PipeListener, pipeName string, copyto io.Writer) {
 
 	// Wait for the pipe to be connected to by the shim
 	log.Debugln("Waiting on ", pipeName)
-	for {
-		outerrConn, err := outerrListen.Accept()
-		if err != nil {
-			log.Debugln(pipeName, err)
-			return
+	outerrConn, err := outerrListen.Accept()
+	if err != nil {
+		log.Debugln(pipeName, err)
+		return
 
-		}
-		log.Debugln("Connected to ", outerrConn.RemoteAddr())
 	}
+	log.Debugln("Connected to ", outerrConn.RemoteAddr())
+
+	// Anything that comes from the container named pipe stdout/err should be copied
+	// across to the stdout/err of the client
+
+	if copyto != nil {
+		go func() {
+			defer outerrConn.Close()
+			log.Debugln("Calling io.Copy on stdout/err")
+			bytes, err := io.Copy(copyto, outerrConn)
+			log.Debugln("Finished io.Copy on stdout/err bytes/err:", bytes, err)
+		}()
+	}
+
 	// BUGBUG We need to pass this in so we can set it: c.ProcessConfig.Cmd.Stdout = stdoutConn
 }
 
@@ -156,6 +192,15 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	log.Debugln(" - WorkingDir    : ", c.WorkingDir)
 	log.Debugln(" - ConfigPath    : ", c.ConfigPath)
 	log.Debugln(" - ProcessLabel  : ", c.ProcessLabel)
+
+	log.Debugln("c.ProcessConfig:")
+	log.Debugln(" args      :", c.ProcessConfig.Args)
+	log.Debugln(" arguments : ", c.ProcessConfig.Arguments)
+	log.Debugln(" cmd.args  : ", c.ProcessConfig.Cmd.Args)
+	log.Debugln(" cmd.dir  : ", c.ProcessConfig.Cmd.Dir)
+	log.Debugln(" cmd.env  : ", c.ProcessConfig.Cmd.Env)
+	log.Debugln(" cmd.extrafiles  : ", c.ProcessConfig.Cmd.ExtraFiles)
+	log.Debugln(" cmd.path  : ", c.ProcessConfig.Cmd.Path)
 
 	var (
 		// term execdriver.Terminal   Commented out for now.
@@ -175,55 +220,48 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 
 	// Connect stdin
 	if pipes.Stdin != nil {
-
-		log.Debugln(pipes.Stdin)
-		log.Debugln(c.ProcessConfig.Cmd.Stdin)
-
-		stdDevices.StdInPipe = `\\.\pipe\docker\` + c.ID + "-stdin"
-
-		// Listen on the named pipe
-		inListen, err = npipe.Listen(stdDevices.StdInPipe)
-		if err != nil {
-			log.Debugln("Failed to listen on ", stdDevices.StdInPipe, err)
-			return execdriver.ExitStatus{ExitCode: -1}, err
-		}
-		defer inListen.Close()
-
-		// Launch a goroutine to do the accept. We do this so that we can
-		// cause an otherwise blocking goroutine to gracefully close when
-		// the caller (us) closes the listener
-		go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
-
-		// TODO There's probably the same c.ProcessConfig.Cmd.Stdin = stdinConn
+		log.Debugln("pipes.Stdin: ", pipes.Stdin)
 	}
+	log.Debugln(c.ProcessConfig.Cmd.Stdin)
 
-	//	log.Debugln("JJH Address: ", inListen == nil)
+	stdDevices.StdInPipe = `\\.\pipe\docker\` + c.ID + "-stdin"
+
+	// Listen on the named pipe
+	inListen, err = npipe.Listen(stdDevices.StdInPipe)
+	if err != nil {
+		log.Debugln("Failed to listen on ", stdDevices.StdInPipe, err)
+		return execdriver.ExitStatus{ExitCode: -1}, err
+	}
+	defer inListen.Close()
+
+	// Launch a goroutine to do the accept. We do this so that we can
+	// cause an otherwise blocking goroutine to gracefully close when
+	// the caller (us) closes the listener
+	go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
+
+	// TODO There's probably the same c.ProcessConfig.Cmd.Stdin = stdinConn
 
 	// Connect stdout
-	if pipes.Stdout != nil {
-		// TODO c.ProcessConfig.Cmd.Stdout = stdoutConn
-		stdDevices.StdOutPipe = `\\.\pipe\docker\` + c.ID + "-stdout"
-		outListen, err = npipe.Listen(stdDevices.StdOutPipe)
-		if err != nil {
-			log.Debugln("Failed to listen on ", stdDevices.StdOutPipe, err)
-			return execdriver.ExitStatus{ExitCode: -1}, err
-		}
-		defer outListen.Close()
-		go stdouterrAccept(outListen, stdDevices.StdOutPipe)
+	// TODO c.ProcessConfig.Cmd.Stdout = stdoutConn
+	stdDevices.StdOutPipe = `\\.\pipe\docker\` + c.ID + "-stdout"
+	outListen, err = npipe.Listen(stdDevices.StdOutPipe)
+	if err != nil {
+		log.Debugln("Failed to listen on ", stdDevices.StdOutPipe, err)
+		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
+	defer outListen.Close()
+	go stdouterrAccept(outListen, stdDevices.StdOutPipe, pipes.Stdout)
 
 	// Connect stderr
-	if pipes.Stderr != nil {
-		// TODO c.ProcessConfig.Cmd.Stderr = stderrConn
-		stdDevices.StdErrPipe = `\\.\pipe\docker\` + c.ID + "-stderr"
-		errListen, err = npipe.Listen(stdDevices.StdErrPipe)
-		if err != nil {
-			log.Debugln("Failed to listen on ", stdDevices.StdErrPipe, err)
-			return execdriver.ExitStatus{ExitCode: -1}, err
-		}
-		defer errListen.Close()
-		go stdouterrAccept(errListen, stdDevices.StdErrPipe)
+	// TODO c.ProcessConfig.Cmd.Stderr = stderrConn
+	stdDevices.StdErrPipe = `\\.\pipe\docker\` + c.ID + "-stderr"
+	errListen, err = npipe.Listen(stdDevices.StdErrPipe)
+	if err != nil {
+		log.Debugln("Failed to listen on ", stdDevices.StdErrPipe, err)
+		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
+	defer errListen.Close()
+	go stdouterrAccept(errListen, stdDevices.StdErrPipe, pipes.Stderr)
 
 	// Temporarily create a dummy container with the ID
 	configuration := `{` + "\n"
@@ -246,33 +284,62 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
-	// Run the command and wait for it to complete.
-	// TODO Windows. Under what circumstances do we not wait and just get the pid out>?
-	var exitCode uint32
-	exitCode, err = hcsshim.RunAndWait(c.ID, "cmd.exe", stdDevices)
+	// Start the command running in the container.
+	var pid uint32
+	pid, err = hcsshim.CreateProcessInComputeSystem(c.ID, "c:\\hcs\\CExecEchoProcess.exe", stdDevices)
 	if err != nil {
-		log.Debugln("RunAndWait() failed ", err)
+		log.Debugln("CreateProcessInComputeSystem() failed ", err)
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
-	log.Debugln("Exit code ", exitCode)
+	log.Debugln("PID ", pid)
 
 	// TODO: Still not sure if I need this? JJH 3/20/15
 	//term, err = execdriver.NewStdConsole(&c.ProcessConfig, pipes)
 	//c.ProcessConfig.Terminal = term
 
+	// Invoke the start callback
 	if startCallback != nil {
-		pid := 12345
-		startCallback(&c.ProcessConfig, pid)
+		startCallback(&c.ProcessConfig, int(pid))
 	}
+
+	// TEMPORARY CODE
+
+	time.Sleep(60 * time.Second)
+	log.Debugln("Bck from sleep()")
+
+	////var PROCESS_ALL_ACCESS = 0x001F0FFF
+	//var PROCESS_ALL_ACCESS = 0x00100000
+	//log.Debugln("Calling OpenProcess()")
+	//h, err := syscall.OpenProcess(uint32(PROCESS_ALL_ACCESS), false, pid)
+	//if err != nil {
+	//	log.Debugln("OpenProcess failed ", err)
+	//	return execdriver.ExitStatus{ExitCode: -1}, err
+	//}
+
+	//log.Debugln("Calling WaitForSingleObject")
+	//syscall.WaitForSingleObject(h, 0xFFFFFFFF)
+	//log.Debugln("Wait completed")
+
+	// END TEMPORARY CODE
 
 	return execdriver.ExitStatus{ExitCode: 0}, nil
 }
 
-func (d *driver) Kill(p *execdriver.Command, sig int) error {
+func (d *driver) Terminate(p *execdriver.Command) error {
+	return kill(p.ID)
+}
 
-	//TODO Windows. Need to call shim driver killing p.ID
-	log.Debugln("Kill() ", p.ID)
-	return nil
+func (d *driver) Kill(p *execdriver.Command, sig int) error {
+	return kill(p.ID)
+}
+
+func kill(ID string) error {
+	log.Debugln("kill() ", ID)
+	err := hcsshim.ChangeState(ID, hcsshim.Stop)
+	if err != nil {
+		log.Debugln("Failed to kill ", ID)
+	}
+	return err
 }
 
 func (d *driver) Pause(c *execdriver.Command) error {
@@ -281,10 +348,6 @@ func (d *driver) Pause(c *execdriver.Command) error {
 
 func (d *driver) Unpause(c *execdriver.Command) error {
 	return fmt.Errorf("Windows containers cannot be paused")
-}
-
-func (d *driver) Terminate(p *execdriver.Command) error {
-	return fmt.Errorf("windowsexec: Terminate() not implemented")
 }
 
 func (i *info) IsRunning() bool {
@@ -301,7 +364,7 @@ func (d *driver) Info(id string) execdriver.Info {
 }
 
 func (d *driver) Name() string {
-	return fmt.Sprintf("%s-%s", DriverName, Version)
+	return fmt.Sprintf("%s Date %s", DriverName, Version)
 }
 
 func (d *driver) GetPidsForContainer(id string) ([]int, error) {

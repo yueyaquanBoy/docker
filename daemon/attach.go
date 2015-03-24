@@ -90,6 +90,7 @@ func (daemon *Daemon) ContainerAttach(job *engine.Job) engine.Status {
 			go func() {
 				defer w.Close()
 				defer log.Debugf("Closing buffered stdin pipe")
+				log.Debugln("JJH ContainerAttach: Calling io.Copy")
 				io.Copy(w, job.Stdin)
 			}()
 			cStdin = r
@@ -120,23 +121,29 @@ func (daemon *Daemon) Attach(streamConfig *StreamConfig, openStdin, stdinOnce, t
 	)
 
 	if stdin != nil && openStdin {
+		log.Debugln("JJH Attach stdin")
 		cStdin = streamConfig.StdinPipe()
 		wg.Add(1)
 	}
 
 	if stdout != nil {
+		log.Debugln("JJH Attach stdout")
 		cStdout = streamConfig.StdoutPipe()
 		wg.Add(1)
 	}
 
 	if stderr != nil {
+		log.Debugln("JJH Attach stderr")
 		cStderr = streamConfig.StderrPipe()
 		wg.Add(1)
 	}
 
 	// Connect stdin of container to the http conn.
 	go func() {
+		log.Debugln("JJH Attach in gofunc")
 		if stdin == nil || !openStdin {
+			log.Debugln("JJH returning - nil or !openStdin", openStdin)
+			log.Debugln("JJH ==nil", stdin == nil)
 			return
 		}
 		log.Debugf("attach: stdin: begin")
@@ -146,9 +153,11 @@ func (daemon *Daemon) Attach(streamConfig *StreamConfig, openStdin, stdinOnce, t
 			} else {
 				// No matter what, when stdin is closed (io.Copy unblock), close stdout and stderr
 				if cStdout != nil {
+					log.Debugln("JJH closing cStdout")
 					cStdout.Close()
 				}
 				if cStderr != nil {
+					log.Debugln("JJH Closing cStderr")
 					cStderr.Close()
 				}
 			}
@@ -160,10 +169,12 @@ func (daemon *Daemon) Attach(streamConfig *StreamConfig, openStdin, stdinOnce, t
 		if tty {
 			_, err = utils.CopyEscapable(cStdin, stdin)
 		} else {
+			log.Debugln("JJH Attach calling io.Copy cStdin, stdin")
 			_, err = io.Copy(cStdin, stdin)
 
 		}
 		if err == io.ErrClosedPipe {
+			log.Debugln("JJH Attach closed pipe. (no error)")
 			err = nil
 		}
 		if err != nil {
@@ -174,7 +185,9 @@ func (daemon *Daemon) Attach(streamConfig *StreamConfig, openStdin, stdinOnce, t
 	}()
 
 	attachStream := func(name string, stream io.Writer, streamPipe io.ReadCloser) {
+		log.Debugln("JJH attachStream function")
 		if stream == nil {
+			log.Debugln("JJH attachStream returning as nill")
 			return
 		}
 		defer func() {
