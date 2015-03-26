@@ -342,8 +342,10 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	log.Debugln("Stopping container ", c.ID)
 	err = hcsshim.ChangeState(c.ID, hcsshim.Stop)
 	if err != nil {
-		log.Debugln("Failed to stop ", err)
-		return execdriver.ExitStatus{ExitCode: -1}, err
+		// IMPORTANT: Don't fail if fails to change state. It could already have been stopped through kill()
+		// Otherwise, the docker daemon will hang in job wait()
+		//log.Debugln("Failed to stop ", err)
+		//return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
 	return execdriver.ExitStatus{ExitCode: 0}, nil
