@@ -12,19 +12,22 @@ type DiffDiskDriver interface {
 }
 
 const (
-	FsMagicWindows = FsMagic(0xa1b1830f) // I have just made this up for now. NTFS=0x5346544E
+	FsMagicWindows      = FsMagic(0xa1b1830f) // I have just made this up for now. NTFS=0x5346544E
+	FsMagicWindowsDummy = FsMagic(0xa1b1831f) // I have just made this up for now. NTFS=0x5346544E
 )
 
 var (
 	// Slice of drivers that should be used in an order
 	priority = []string{
 		"windows",
+		"windowsdummy",
 	}
 
 	FsNames = map[FsMagic]string{
 
-		FsMagicWindows:     "windows",
-		FsMagicUnsupported: "unsupported",
+		FsMagicWindows:      "windows",
+		FsMagicWindowsDummy: "windowsdummy",
+		FsMagicUnsupported:  "unsupported",
 	}
 )
 

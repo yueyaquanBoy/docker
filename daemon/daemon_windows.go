@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/daemon/execdriver/execdrivers"
 	"github.com/docker/docker/daemon/graphdriver"
 	_ "github.com/docker/docker/daemon/graphdriver/windows"
+	_ "github.com/docker/docker/daemon/graphdriver/windummy"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/graph"
 	"github.com/docker/docker/pkg/archive"

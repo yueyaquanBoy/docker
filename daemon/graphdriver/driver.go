@@ -104,6 +104,7 @@ func GetDriver(name, home string, options []string) (Driver, error) {
 func New(root string, options []string) (driver Driver, err error) {
 	for _, name := range []string{os.Getenv("DOCKER_DRIVER"), DefaultDriver} {
 		if name != "" {
+			log.Debugln("name=", "'"+name+"'")
 			return GetDriver(name, root, options)
 		}
 	}
