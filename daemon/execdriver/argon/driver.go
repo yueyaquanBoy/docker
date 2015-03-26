@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	//"syscall"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
@@ -196,6 +194,7 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	log.Debugln("c.ProcessConfig:")
 	log.Debugln(" args      :", c.ProcessConfig.Args)
 	log.Debugln(" arguments : ", c.ProcessConfig.Arguments)
+	log.Debugln(" entrypoint : ", c.ProcessConfig.Entrypoint)
 	log.Debugln(" cmd.args  : ", c.ProcessConfig.Cmd.Args)
 	log.Debugln(" cmd.dir  : ", c.ProcessConfig.Cmd.Dir)
 	log.Debugln(" cmd.env  : ", c.ProcessConfig.Cmd.Env)
@@ -263,6 +262,11 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	defer errListen.Close()
 	go stdouterrAccept(errListen, stdDevices.StdErrPipe, pipes.Stderr)
 
+	// HACK HACK
+	//stdDevices.StdInPipe = ""
+	//stdDevices.StdErrPipe = ""
+	//stdDevices.StdOutPipe = ""
+
 	// Temporarily create a dummy container with the ID
 	configuration := `{` + "\n"
 	configuration += ` "SystemType" : "Container",` + "\n"
@@ -286,12 +290,34 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 
 	// Start the command running in the container.
 	var pid uint32
-	pid, err = hcsshim.CreateProcessInComputeSystem(c.ID, "c:\\hcs\\CExecEchoProcess.exe", stdDevices)
+	//pid, err = hcsshim.CreateProcessInComputeSystem(c.ID, "c:\\hcs\\CExecEchoProcess.exe 60", stdDevices)
+
+	// Pretty sure this would get caught earlier, but just in case
+	// validate that we have something to run
+	if c.ProcessConfig.Entrypoint == "" {
+		err = errors.New("No entrypoint specified")
+		log.Debugln(err)
+		return execdriver.ExitStatus{ExitCode: -1}, err
+	}
+
+	// Build the command line of the process
+	commandLine := c.ProcessConfig.Entrypoint
+	for _, arg := range c.ProcessConfig.Arguments {
+		log.Debugln("appending ", arg)
+		commandLine += " " + arg
+	}
+	log.Debugln("commandLine: ", commandLine)
+
+	// Launch the process
+	pid, err = hcsshim.CreateProcessInComputeSystem(c.ID, commandLine, stdDevices)
 	if err != nil {
 		log.Debugln("CreateProcessInComputeSystem() failed ", err)
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
+
+	//Save the PID as we'll need this in Kill()
 	log.Debugln("PID ", pid)
+	c.ContainerPid = int(pid)
 
 	// TODO: Still not sure if I need this? JJH 3/20/15
 	//term, err = execdriver.NewStdConsole(&c.ProcessConfig, pipes)
@@ -302,43 +328,54 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		startCallback(&c.ProcessConfig, int(pid))
 	}
 
-	// TEMPORARY CODE
+	var exitCode uint32
+	exitCode, err = hcsshim.WaitForProcessInComputeSystem(c.ID, pid)
+	if err != nil {
+		log.Debugln("Failed to WaitForProcessInComputeSystem ", err)
+		return execdriver.ExitStatus{ExitCode: -1}, err
+	}
 
-	time.Sleep(60 * time.Second)
-	log.Debugln("Bck from sleep()")
+	// TODO - What do we do with this exit code????
+	log.Debugln("exitcode err", exitCode, err)
 
-	////var PROCESS_ALL_ACCESS = 0x001F0FFF
-	//var PROCESS_ALL_ACCESS = 0x00100000
-	//log.Debugln("Calling OpenProcess()")
-	//h, err := syscall.OpenProcess(uint32(PROCESS_ALL_ACCESS), false, pid)
-	//if err != nil {
-	//	log.Debugln("OpenProcess failed ", err)
-	//	return execdriver.ExitStatus{ExitCode: -1}, err
-	//}
-
-	//log.Debugln("Calling WaitForSingleObject")
-	//syscall.WaitForSingleObject(h, 0xFFFFFFFF)
-	//log.Debugln("Wait completed")
-
-	// END TEMPORARY CODE
+	// Stop the container
+	log.Debugln("Stopping container ", c.ID)
+	err = hcsshim.ChangeState(c.ID, hcsshim.Stop)
+	if err != nil {
+		log.Debugln("Failed to stop ", err)
+		return execdriver.ExitStatus{ExitCode: -1}, err
+	}
 
 	return execdriver.ExitStatus{ExitCode: 0}, nil
 }
 
 func (d *driver) Terminate(p *execdriver.Command) error {
-	return kill(p.ID)
+	log.Debugln("WindowsExec: Terminate() ", p.ID)
+	return kill(p.ID, p.ContainerPid)
 }
 
 func (d *driver) Kill(p *execdriver.Command, sig int) error {
-	return kill(p.ID)
+	log.Debugln("WindowsExec: Kill() ", p.ID, sig)
+	return kill(p.ID, p.ContainerPid)
 }
 
-func kill(ID string) error {
+func kill(ID string, PID int) error {
 	log.Debugln("kill() ", ID)
-	err := hcsshim.ChangeState(ID, hcsshim.Stop)
+	log.Debugln("PID", PID)
+
+	// TODO Terminate Process
+	err := hcsshim.TerminateProcessInComputeSystem(ID, uint32(PID))
+	if err != nil {
+		log.Debugln("Failed to Terminate ", err)
+		// Ignore errors
+		err = nil
+	}
+
+	err = hcsshim.ChangeState(ID, hcsshim.Stop)
 	if err != nil {
 		log.Debugln("Failed to kill ", ID)
 	}
+
 	return err
 }
 

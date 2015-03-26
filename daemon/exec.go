@@ -145,7 +145,7 @@ func (d *Daemon) ContainerExecStart(job *engine.Job) engine.Status {
 		r, w := io.Pipe()
 		go func() {
 			defer w.Close()
-			defer log.Debugf("Closing buffered stdin pipe")
+			defer log.Debugf("exec Closing buffered stdin pipe")
 			io.Copy(w, job.Stdin)
 		}()
 		cStdin = r

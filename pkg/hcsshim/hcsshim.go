@@ -15,11 +15,13 @@ import (
 const (
 	SHIMDLL = "vmcompute.dll"
 
-	PROCCREATE                       = "CreateComputeSystem"
-	PROCSTART                        = "StartComputeSystem"
-	PROCTERMINATE                    = "TerminateComputeSystem"
-	PROCRUNANDWAIT                   = "ExecuteInComputeSystem"
-	PROCCREATEPROCESSINCOMPUTESYSTEM = "CreateProcessInComputeSystem"
+	PROCCREATE                          = "CreateComputeSystem"
+	PROCSTART                           = "StartComputeSystem"
+	PROCTERMINATE                       = "TerminateComputeSystem"
+	PROCRUNANDWAIT                      = "ExecuteInComputeSystem"
+	PROCCREATEPROCESSINCOMPUTESYSTEM    = "CreateProcessInComputeSystem"
+	PROCWAITFORPROCESSINCOMPUTESYSTEM   = "WaitForProcessInComputeSystem"
+	PROCTERMINATEPROCESSINCOMPUTESYSTEM = "TerminateProcessInComputeSystem"
 )
 
 var (
@@ -395,13 +397,13 @@ func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devi
 	// Check the result codes first
 	if r1 != 0 || r2 != 0 {
 		log.Debugln("r1 ", r1)
-		return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " failed r1/r2 check")
+		return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " could not run " + CommandLine)
 	}
 
 	// Check for error itself next
 	if err != nil {
 		if err.Error() != "The operation completed successfully." {
-			return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " failed. " + err.Error())
+			return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " failed. " + err.Error() + ". Command=" + CommandLine)
 		}
 	}
 
@@ -411,6 +413,136 @@ func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devi
 
 	return *pid, nil
 } // CreateProcessInComputeSystem
+
+func WaitForProcessInComputeSystem(ID string, ProcessId uint32) (ExitCode uint32, err error) {
+
+	log.Debugln("hcsshim::WaitForProcessInComputeSystem")
+	log.Debugln("ID:", ID)
+	log.Debugln("ProcessID:", ProcessId)
+
+	var (
+		// To pass into syscall, we need uint16 pointers to the strings
+		IDp *uint16
+
+		// Result values from calling the procedure
+		r1, r2 uintptr
+
+		// The DLL and procedure in the DLL respectively
+		dll  *syscall.DLL
+		proc *syscall.Proc
+
+		// Infinite
+		Timeout uint32 = 0xFFFFFFFF // (-1)
+	)
+
+	// Load the DLL and get the CreateProcessInComputeSystem function
+	dll, proc, err = loadAndFind(PROCWAITFORPROCESSINCOMPUTESYSTEM)
+
+	// Release once used if we managed to get a handle to it
+	if dll != nil {
+		defer dll.Release()
+	}
+
+	// Check for error from loadAndFind
+	if err != nil {
+		return 0, err
+	}
+
+	// Convert ID to uint16 pointer for calling the procedure
+	IDp, err = syscall.UTF16PtrFromString(ID)
+	if err != nil {
+		log.Debugln("Failed conversion of ID to pointer ", err)
+		return 0, err
+	}
+
+	// To get a POINTER to the ExitCode
+	ec := new(uint32)
+
+	// Call the procedure itself.
+	r1, r2, err = proc.Call(
+		uintptr(unsafe.Pointer(IDp)),
+		uintptr(ProcessId),
+		uintptr(Timeout),
+		uintptr(unsafe.Pointer(ec)))
+
+	// Check the result codes first
+	if r1 != 0 || r2 != 0 {
+		log.Debugln("r1 ", r1)
+		return 0, errors.New(PROCWAITFORPROCESSINCOMPUTESYSTEM + " failed r1/r2 check")
+	}
+
+	// Check for error itself next
+	if err != nil {
+		if err.Error() != "The operation completed successfully." {
+			return 0, errors.New(PROCWAITFORPROCESSINCOMPUTESYSTEM + " failed. " + err.Error())
+		}
+	}
+
+	if ec != nil {
+		log.Debugln("hcsshim::WaitForProcessInComputeSystem ExitCode ", *ec)
+	}
+
+	return *ec, nil
+} // WaitForProcessInComputeSystem
+
+func TerminateProcessInComputeSystem(ID string, ProcessId uint32) (err error) {
+
+	log.Debugln("hcsshim::TerminateProcessInComputeSystem")
+	log.Debugln("ID:", ID)
+	log.Debugln("ProcessID:", ProcessId)
+
+	var (
+		// To pass into syscall, we need uint16 pointers to the strings
+		IDp *uint16
+
+		// Result values from calling the procedure
+		r1, r2 uintptr
+
+		// The DLL and procedure in the DLL respectively
+		dll  *syscall.DLL
+		proc *syscall.Proc
+	)
+
+	// Load the DLL and get the TerminateProcessInComputeSystem function
+	dll, proc, err = loadAndFind(PROCTERMINATEPROCESSINCOMPUTESYSTEM)
+
+	// Release once used if we managed to get a handle to it
+	if dll != nil {
+		defer dll.Release()
+	}
+
+	// Check for error from loadAndFind
+	if err != nil {
+		return err
+	}
+
+	// Convert ID to uint16 pointer for calling the procedure
+	IDp, err = syscall.UTF16PtrFromString(ID)
+	if err != nil {
+		log.Debugln("Failed conversion of ID to pointer ", err)
+		return err
+	}
+
+	// Call the procedure itself.
+	r1, r2, err = proc.Call(
+		uintptr(unsafe.Pointer(IDp)),
+		uintptr(ProcessId))
+
+	// Check the result codes first
+	if r1 != 0 || r2 != 0 {
+		log.Debugln("r1 ", r1)
+		return errors.New(PROCTERMINATEPROCESSINCOMPUTESYSTEM + " failed r1/r2 check")
+	}
+
+	// Check for error itself next
+	if err != nil {
+		if err.Error() != "The operation completed successfully." {
+			return errors.New(PROCTERMINATEPROCESSINCOMPUTESYSTEM + " failed. " + err.Error())
+		}
+	}
+
+	return nil
+} // TerminateProcessInComputeSystem
 
 func loadAndFind(Procedure string) (dll *syscall.DLL, proc *syscall.Proc, err error) {
 

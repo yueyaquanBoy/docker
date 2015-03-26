@@ -89,7 +89,7 @@ func (daemon *Daemon) ContainerAttach(job *engine.Job) engine.Status {
 			r, w := io.Pipe()
 			go func() {
 				defer w.Close()
-				defer log.Debugf("Closing buffered stdin pipe")
+				defer log.Debugf("attach Closing buffered stdin pipe")
 				log.Debugln("JJH ContainerAttach: Calling io.Copy")
 				io.Copy(w, job.Stdin)
 			}()
