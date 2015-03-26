@@ -235,7 +235,11 @@ func run(b *Builder, args []string, attributes map[string]bool, original string)
 	args = handleJsonArgs(args, attributes)
 
 	if !attributes["json"] {
-		args = append([]string{"/bin/sh", "-c"}, args...)
+		if runtime.GOOS != "windows" {
+			args = append([]string{"/bin/sh", "-c"}, args...)
+		} else {
+			args = append([]string{"cmd", "/C"}, args...)
+		}
 	}
 
 	runCmd := flag.NewFlagSet("run", flag.ContinueOnError)
@@ -294,7 +298,11 @@ func cmd(b *Builder, args []string, attributes map[string]bool, original string)
 	b.Config.Cmd = handleJsonArgs(args, attributes)
 
 	if !attributes["json"] {
-		b.Config.Cmd = append([]string{"/bin/sh", "-c"}, b.Config.Cmd...)
+		if runtime.GOOS != "windows" {
+			b.Config.Cmd = append([]string{"/bin/sh", "-c"}, b.Config.Cmd...)
+		} else {
+			b.Config.Cmd = append([]string{"cmd", "/C"}, b.Config.Cmd...)
+		}
 	}
 
 	if err := b.commit("", b.Config.Cmd, fmt.Sprintf("CMD %q", b.Config.Cmd)); err != nil {
@@ -328,7 +336,11 @@ func entrypoint(b *Builder, args []string, attributes map[string]bool, original 
 		b.Config.Entrypoint = nil
 	default:
 		// ENTRYPOINT echo hi
-		b.Config.Entrypoint = []string{"/bin/sh", "-c", parsed[0]}
+		if runtime.GOOS != "windows" {
+			b.Config.Entrypoint = []string{"/bin/sh", "-c", parsed[0]}
+		} else {
+			b.Config.Entrypoint = []string{"cmd", "/C", parsed[0]}
+		}
 	}
 
 	// when setting the entrypoint if a CMD was not explicitly set then
