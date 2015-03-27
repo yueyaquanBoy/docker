@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -56,6 +57,18 @@ func (daemon *Daemon) Diff(container *Container) (archive.Archive, error) {
 }
 
 func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error) {
+
+	var dwVersion uint32
+
+	dwVersion, err := syscall.GetVersion()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to call GetVersion()")
+	}
+
+	if int(dwVersion&0xFF) < 10 {
+		return nil, fmt.Errorf("Incorrect Windows Version. Is the manifest present?")
+	}
+
 	if config.Mtu == 0 {
 		config.Mtu = getDefaultNetworkMtu()
 	}
