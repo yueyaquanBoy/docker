@@ -6,6 +6,11 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
+type DiffDiskDriver interface {
+	Driver
+	CopyDiff(id, sourceId string) error
+}
+
 const (
 	FsMagicWindows = FsMagic(0xa1b1830f) // I have just made this up for now. NTFS=0x5346544E
 )

@@ -1,8 +1,10 @@
 package daemon
 
 import (
-	"github.com/docker/docker/daemon/execdriver"
 	"time"
+
+	"github.com/docker/docker/daemon/execdriver"
+	"github.com/docker/docker/pkg/archive"
 )
 
 func (container *Container) Kill() error {
@@ -67,6 +69,10 @@ func (container *Container) prepareVolumes() error {
 // GetSize, return real size, virtual size
 func (container *Container) GetSize() (int64, int64) {
 	return 0, 0
+}
+
+func (container *Container) ExportRw() (archive.Archive, error) {
+	return nil, nil
 }
 
 func populateCommand(c *Container, env []string) error {
