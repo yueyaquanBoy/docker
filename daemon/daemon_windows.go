@@ -18,6 +18,7 @@ import (
 	_ "github.com/docker/docker/daemon/graphdriver/windows"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/graph"
+	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/graphdb"
 	"github.com/docker/docker/pkg/sysinfo"
 	"github.com/docker/docker/pkg/truncindex"
@@ -31,6 +32,26 @@ import (
 // TODO Windows This can probably be factored out better
 func KillIfLxc(ID string) {
 	// No-op on Windows as Lxc execution driver is not used.
+}
+
+func (daemon *Daemon) createRootfs(container *Container) error {
+	// Step 1: create the container directory.
+	// This doubles as a barrier to avoid race conditions.
+	if err := os.Mkdir(container.root, 0700); err != nil {
+		return err
+	}
+	if err := daemon.driver.Create(container.ID, container.ImageID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (daemon *Daemon) Changes(container *Container) ([]archive.Change, error) {
+	return daemon.driver.Changes(container.ID, container.ImageID)
+}
+
+func (daemon *Daemon) Diff(container *Container) (archive.Archive, error) {
+	return daemon.driver.Diff(container.ID, container.ImageID)
 }
 
 func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error) {

@@ -40,6 +40,42 @@ func KillIfLxc(ID string) {
 	lxc.KillLxc(ID, 9)
 }
 
+func (daemon *Daemon) createRootfs(container *Container) error {
+	// Step 1: create the container directory.
+	// This doubles as a barrier to avoid race conditions.
+	if err := os.Mkdir(container.root, 0700); err != nil {
+		return err
+	}
+	initID := fmt.Sprintf("%s-init", container.ID)
+	if err := daemon.driver.Create(initID, container.ImageID); err != nil {
+		return err
+	}
+	initPath, err := daemon.driver.Get(initID, "")
+	if err != nil {
+		return err
+	}
+	defer daemon.driver.Put(initID)
+
+	if err := graph.SetupInitLayer(initPath); err != nil {
+		return err
+	}
+
+	if err := daemon.driver.Create(container.ID, initID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (daemon *Daemon) Changes(container *Container) ([]archive.Change, error) {
+	initID := fmt.Sprintf("%s-init", container.ID)
+	return daemon.driver.Changes(container.ID, initID)
+}
+
+func (daemon *Daemon) Diff(container *Container) (archive.Archive, error) {
+	initID := fmt.Sprintf("%s-init", container.ID)
+	return daemon.driver.Diff(container.ID, initID)
+}
+
 func checkKernel() error {
 	// Check for unsupported kernel versions
 	// FIXME: it would be cleaner to not test for specific versions, but rather

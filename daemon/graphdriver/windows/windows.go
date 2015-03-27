@@ -6,15 +6,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/graphdriver"
+	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
+	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/pshell"
 	"github.com/docker/docker/pkg/system"
-	"github.com/docker/libcontainer/label"
 )
 
 func init() {
@@ -37,7 +38,7 @@ func Init(home string, options []string) (graphdriver.Driver, error) {
 	}
 
 	//return d, nil
-	return graphdriver.NaiveDiffDriver(d), nil
+	return d, nil
 
 }
 
@@ -66,7 +67,7 @@ func (d *Driver) Exists(id string) bool {
 }
 
 func (d *Driver) Create(id, parent string) error {
-	log.Debugln("WindowsGraphDriver Create() id %s, parent %s", id, parent)
+	log.Debugln("WindowsGraphDriver Create() id:", id, ", parent:", parent)
 
 	dir := d.dir(id)
 	log.Debugln("dir=", dir)
@@ -76,31 +77,21 @@ func (d *Driver) Create(id, parent string) error {
 	if err := os.Mkdir(dir, 0755); err != nil {
 		return err
 	}
-	opts := []string{"level:s0"}
-	if _, mountLabel, err := label.InitLabels(opts); err == nil {
-		label.Relabel(dir, mountLabel, "")
-	}
-	if strings.HasSuffix(parent, "-init") {
-		// This is a layer for a container. It should be
-		// a mount point into a VHD.
-		if err := CreateAndMountVhd(id, dir); err != nil {
+	if parent == "" {
+		// This is a base layer, so create a new VHD.
+		if err := CreateBaseVhd(id, dir); err != nil {
 			return err
 		}
-		defer DismountVhd(dir)
-	}
-	if parent == "" {
-		return nil
-	}
-	parentDir, err := d.Get(parent, "")
-	if err != nil {
-		return fmt.Errorf("%s: %s", parent, err)
+	} else {
+		// This is an intermediate layer, so create a diff-VHD from
+		// the parent.
+		parentDir := d.dir(parent)
+		log.Debugln("parentDir=", parentDir)
+		if err := CreateDiffVhd(id, dir, parentDir); err != nil {
+			return err
+		}
 	}
 
-	log.Debugln("Calling chrootarchive.CopyWithTar parentDir", parentDir)
-	log.Debugln("Calling chrootarchive.CopyWithTar dir", dir)
-	if err := chrootarchive.CopyWithTar(parentDir, dir); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -113,10 +104,6 @@ func (d *Driver) Remove(id string) error {
 	log.Debugln("WindowsGraphDriver Remove()", id)
 
 	dir := d.dir(id)
-	st, err := system.Lstat(dir)
-	if err != nil {
-		return err
-	}
 
 	d.Lock()
 	defer d.Unlock()
@@ -125,17 +112,13 @@ func (d *Driver) Remove(id string) error {
 		log.Errorf("Removing active id %s", id)
 	}
 
-	if st.Mode()&os.ModeSymlink != 0 {
-		// This is a layer for a container. It should be
-		// a mount point into a VHD.
-		if d.active[id] > 0 {
-			if err := DismountVhd(dir); err != nil {
-				return err
-			}
-		}
-		if err := os.Remove(dir + ".vhdx"); err != nil {
+	if d.active[id] > 0 {
+		if err := DismountVhd(dir); err != nil {
 			return err
 		}
+	}
+	if err := os.Remove(dir + ".vhdx"); err != nil {
+		return err
 	}
 
 	return os.RemoveAll(dir)
@@ -144,7 +127,7 @@ func (d *Driver) Remove(id string) error {
 // Return the rootfs path for the id
 // This will mount the dir at it's given path
 func (d *Driver) Get(id, mountLabel string) (string, error) {
-	log.Debugln("WindowsGraphDriver Get()", id, mountLabel)
+	log.Debugln("WindowsGraphDriver Get() id:", id, ", mountLabel:", mountLabel)
 
 	dir := d.dir(id)
 	st, err := system.Lstat(dir)
@@ -157,9 +140,7 @@ func (d *Driver) Get(id, mountLabel string) (string, error) {
 	d.Lock()
 	defer d.Unlock()
 
-	if st.Mode()&os.ModeSymlink != 0 && d.active[id] == 0 {
-		// This is a layer for a container. It should be
-		// a mount point into a VHD.
+	if d.active[id] == 0 {
 		volumePath, err := MountVhd(dir)
 		if err != nil {
 			return "", err
@@ -173,24 +154,18 @@ func (d *Driver) Get(id, mountLabel string) (string, error) {
 }
 
 func (d *Driver) Put(id string) error {
-	log.Debugln("WindowsGraphDriver Put() %s", id)
+	log.Debugln("WindowsGraphDriver Put() id:", id)
 
 	dir := d.dir(id)
-	st, err := system.Lstat(dir)
-	if err != nil {
-		return err
-	}
 
 	d.Lock()
 	defer d.Unlock()
 
-	d.active[id]--
-	if st.Mode()&os.ModeSymlink != 0 && d.active[id] == 0 {
-		// This is a layer for a container. It should be
-		// a mount point into a VHD.
+	if d.active[id] == 1 {
 		if err := DismountVhd(dir); err != nil {
 			return err
 		}
+		d.active[id]--
 		delete(d.active, id)
 	}
 
@@ -202,11 +177,120 @@ func (d *Driver) Cleanup() error {
 	return nil
 }
 
-func CreateAndMountVhd(id string, folder string) error {
-	// This script will create a VHD as a peer of the given folder, then mount
-	// that VHD at the given folder, attempting to clean up if
-	// any part of the process fails. NOTE: the indentation must be spaces
-	// and not tabs, otherwise the powershell invocation will fail.
+// Diff produces an archive of the changes between the specified
+// layer and its parent layer which may be "".
+func (d *Driver) Diff(id, parent string) (arch archive.Archive, err error) {
+	layerFs, err := d.Get(id, "")
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			d.Put(id)
+		}
+	}()
+
+	if parent == "" {
+		archive, err := archive.Tar(layerFs, archive.Uncompressed)
+		if err != nil {
+			return nil, err
+		}
+		return ioutils.NewReadCloserWrapper(archive, func() error {
+			err := archive.Close()
+			d.Put(id)
+			return err
+		}), nil
+	}
+
+	parentFs, err := d.Get(parent, "")
+	if err != nil {
+		return nil, err
+	}
+	defer d.Put(parent)
+
+	changes, err := archive.ChangesDirs(layerFs, parentFs)
+	if err != nil {
+		return nil, err
+	}
+
+	archive, err := archive.ExportChanges(layerFs, changes)
+	if err != nil {
+		return nil, err
+	}
+
+	return ioutils.NewReadCloserWrapper(archive, func() error {
+		err := archive.Close()
+		d.Put(id)
+		return err
+	}), nil
+}
+
+// Changes produces a list of changes between the specified layer
+// and its parent layer. If parent is "", then all changes will be ADD changes.
+func (d *Driver) Changes(id, parent string) ([]archive.Change, error) {
+	layerFs, err := d.Get(id, "")
+	if err != nil {
+		return nil, err
+	}
+	defer d.Put(id)
+
+	parentFs := ""
+
+	if parent != "" {
+		parentFs, err = d.Get(parent, "")
+		if err != nil {
+			return nil, err
+		}
+		defer d.Put(parent)
+	}
+
+	return archive.ChangesDirs(layerFs, parentFs)
+}
+
+// ApplyDiff extracts the changeset from the given diff into the
+// layer with the specified id and parent, returning the size of the
+// new layer in bytes.
+func (d *Driver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (size int64, err error) {
+	// Mount the root filesystem so we can apply the diff/layer.
+	_, err = d.Get(id, "")
+	if err != nil {
+		return
+	}
+	defer d.Put(id)
+
+	start := time.Now().UTC()
+	log.Debugf("Start untar layer")
+	if size, err = chrootarchive.ApplyLayer(d.dir(id), diff); err != nil {
+		return
+	}
+	log.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())
+
+	return
+}
+
+// DiffSize calculates the changes between the specified layer
+// and its parent and returns the size in bytes of the changes
+// relative to its base filesystem directory.
+func (d *Driver) DiffSize(id, parent string) (size int64, err error) {
+	changes, err := d.Changes(id, parent)
+	if err != nil {
+		return
+	}
+
+	layerFs, err := d.Get(id, "")
+	if err != nil {
+		return
+	}
+	defer d.Put(id)
+
+	return archive.ChangesSize(layerFs, changes), nil
+}
+
+func CreateBaseVhd(id string, folder string) error {
+	// This script will create a VHD as a peer of the given folder,
+	// NOTE: the indentation must be spaces and not tabs, otherwise
+	// the powershell invocation will fail.
 	script := `
     $name = "` + id + `"
     $folder = "` + folder + `"
@@ -227,7 +311,8 @@ func CreateAndMountVhd(id string, folder string) error {
         throwifnull $partition
         $volume = $partition | Format-Volume -FileSystem NTFS -NewFileSystemLabel "disk_$name" -Confirm:$false
         throwifnull $volume
-        mountvol $folder $volume.path
+        mountvol $folder $volume.Path
+        Dismount-VHD $mounted.Path
     }catch{
         if ($mounted){Dismount-VHD $mounted.Path}
         if (Test-Path $path){rm $path}
@@ -235,7 +320,44 @@ func CreateAndMountVhd(id string, folder string) error {
     }
     `
 
-	log.Debugln("Attempting to create and mount vhdx named '", id, "'at'", folder, "'")
+	log.Debugln("Attempting to create base vhdx named '", id, "'at'", folder, "'")
+	_, err := pshell.ExecutePowerShell(script)
+	return err
+}
+
+func CreateDiffVhd(id string, folder string, parent string) error {
+	// This script will create a diff disk VHD as a peer of the given folder,
+	// using the parent as the parent disk.
+	// NOTE: the indentation must be spaces and not tabs, otherwise
+	// the powershell invocation will fail.
+	script := `
+    $name = "` + id + `"
+    $folder = "` + folder + `"
+    $parentDisk = "` + parent + `.vhdx"
+    $path = "$(Split-Path $folder)\$name.vhdx"
+    function throwifnull {
+        if ($args[0] -eq $null){
+            throw
+        }
+    }
+    try {
+        $vhd = New-VHD -Path $path -ParentPath $parentDisk -Diff
+        throwifnull $vhd
+        $mounted = $vhd | Mount-VHD -Passthru
+        throwifnull $mounted
+        $mounted | Get-Disk | Set-Disk -IsOffline $false
+        $volume = $mounted | Get-Disk | Get-Partition | Get-Volume
+        throwifnull $volume
+        mountvol $folder $volume.Path
+        Dismount-VHD $mounted.Path
+    }catch{
+        if ($mounted){Dismount-VHD $mounted.Path}
+        if (Test-Path $path){rm $path}
+        throw
+    }
+    `
+
+	log.Debugln("Attempting to create diff vhdx named '", id, "'at'", folder, "'")
 	_, err := pshell.ExecutePowerShell(script)
 	return err
 }

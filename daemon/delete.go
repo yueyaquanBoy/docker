@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
@@ -108,9 +109,11 @@ func (daemon *Daemon) Rm(container *Container) error {
 		return fmt.Errorf("Driver %s failed to remove root filesystem %s: %s", daemon.driver, container.ID, err)
 	}
 
-	initID := fmt.Sprintf("%s-init", container.ID)
-	if err := daemon.driver.Remove(initID); err != nil {
-		return fmt.Errorf("Driver %s failed to remove init filesystem %s: %s", daemon.driver, initID, err)
+	if runtime.GOOS != "windows" {
+		initID := fmt.Sprintf("%s-init", container.ID)
+		if err := daemon.driver.Remove(initID); err != nil {
+			return fmt.Errorf("Driver %s failed to remove init filesystem %s: %s", daemon.driver, initID, err)
+		}
 	}
 
 	if err := os.RemoveAll(container.root); err != nil {
