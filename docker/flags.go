@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/homedir"
@@ -16,18 +15,12 @@ var (
 	dockerTlsVerify = os.Getenv("DOCKER_TLS_VERIFY") != ""
 )
 
+// TODO Windows. Need to figure out if this is used by both client and server.
+// If just server, need to refactor this so that it uses %PROGRAMDATA%
 func init() {
 	if dockerCertPath == "" {
 		dockerCertPath = filepath.Join(homedir.Get(), ".docker")
 	}
-}
-
-func getDaemonConfDir() string {
-	// TODO: update for Windows daemon
-	if runtime.GOOS == "windows" {
-		return filepath.Join(homedir.Get(), ".docker")
-	}
-	return "/etc/docker"
 }
 
 var (
