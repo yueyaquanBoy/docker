@@ -145,6 +145,8 @@ func stdinAccept(inListen *npipe.PipeListener, pipeName string, copyfrom io.Read
 			bytes, err := io.Copy(stdinConn, copyfrom)
 			log.Debugln("Finished io.Copy on stdin bytes/err:", bytes, err)
 		}()
+	} else {
+		defer stdinConn.Close()
 	}
 }
 
@@ -174,8 +176,10 @@ func stdouterrAccept(outerrListen *npipe.PipeListener, pipeName string, copyto i
 			defer outerrConn.Close()
 			log.Debugln("Calling io.Copy on stdout/err")
 			bytes, err := io.Copy(copyto, outerrConn)
-			log.Debugln("Finished io.Copy on stdout/err bytes/err:", bytes, err)
+			log.Debugln("Copied bytes/err/pipe:", bytes, err, outerrConn.RemoteAddr())
 		}()
+	} else {
+		defer outerrConn.Close()
 	}
 
 	// BUGBUG We need to pass this in so we can set it: c.ProcessConfig.Cmd.Stdout = stdoutConn
