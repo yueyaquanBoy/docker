@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	DriverName = "1854"
-	Version    = "24-Mar-2015"
+	DriverName = "Windows. 1854"
+	Version    = "30-Mar-2015"
 )
 
 type driver struct {
@@ -220,25 +220,24 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	// Connect stdin
 	if pipes.Stdin != nil {
 		log.Debugln("pipes.Stdin: ", pipes.Stdin)
+
+		stdDevices.StdInPipe = `\\.\pipe\docker\` + c.ID + "-stdin"
+
+		// Listen on the named pipe
+		inListen, err = npipe.Listen(stdDevices.StdInPipe)
+		if err != nil {
+			log.Debugln("Failed to listen on ", stdDevices.StdInPipe, err)
+			return execdriver.ExitStatus{ExitCode: -1}, err
+		}
+		defer inListen.Close()
+
+		// Launch a goroutine to do the accept. We do this so that we can
+		// cause an otherwise blocking goroutine to gracefully close when
+		// the caller (us) closes the listener
+		go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
+
+		// TODO There's probably the same c.ProcessConfig.Cmd.Stdin = stdinConn
 	}
-	log.Debugln(c.ProcessConfig.Cmd.Stdin)
-
-	stdDevices.StdInPipe = `\\.\pipe\docker\` + c.ID + "-stdin"
-
-	// Listen on the named pipe
-	inListen, err = npipe.Listen(stdDevices.StdInPipe)
-	if err != nil {
-		log.Debugln("Failed to listen on ", stdDevices.StdInPipe, err)
-		return execdriver.ExitStatus{ExitCode: -1}, err
-	}
-	defer inListen.Close()
-
-	// Launch a goroutine to do the accept. We do this so that we can
-	// cause an otherwise blocking goroutine to gracefully close when
-	// the caller (us) closes the listener
-	go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
-
-	// TODO There's probably the same c.ProcessConfig.Cmd.Stdin = stdinConn
 
 	// Connect stdout
 	// TODO c.ProcessConfig.Cmd.Stdout = stdoutConn
