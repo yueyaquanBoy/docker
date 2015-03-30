@@ -109,15 +109,14 @@ func Create(ID string, Configuration string) error {
 
 	// Check the result codes first
 	if r1 != 0 || r2 != 0 {
+		// Check for error itself next
+		if err != nil {
+			if err.Error() != "The operation completed successfully." {
+				return errors.New(PROCCREATE + " failed. " + err.Error())
+			}
+		}
 		log.Debugln("r1 ", r1)
 		return errors.New(PROCCREATE + " failed r1/r2 check")
-	}
-
-	// Check for error itself next
-	if err != nil {
-		if err.Error() != "The operation completed successfully." {
-			return errors.New(PROCCREATE + " failed. " + err.Error())
-		}
 	}
 
 	return nil
@@ -185,14 +184,13 @@ func ChangeState(ID string, newState int) error {
 	// Check the result codes first
 	if r1 != 0 || r2 != 0 {
 		log.Debugln("r1 ", r1)
-		return errors.New(procname + " failed r1/r2 check")
-	}
-
-	// Check for error itself next
-	if err != nil {
-		if err.Error() != "The operation completed successfully." {
-			return errors.New(procname + " failed. " + err.Error())
+		// Check for error itself next
+		if err != nil {
+			if err.Error() != "The operation completed successfully." {
+				return errors.New(procname + " failed. " + err.Error())
+			}
 		}
+		return errors.New(procname + " failed r1/r2 check")
 	}
 
 	return nil
@@ -291,14 +289,13 @@ func RunAndWait(ID string, CommandLine string, StdDevices Devices) (ExitCode uin
 	// Check the result codes first
 	if r1 != 0 || r2 != 0 {
 		log.Debugln("r1 ", r1)
-		return 0, errors.New(PROCRUNANDWAIT + " failed r1/r2 check")
-	}
-
-	// Check for error itself next
-	if err != nil {
-		if err.Error() != "The operation completed successfully." {
-			return 0, errors.New(PROCRUNANDWAIT + " failed. " + err.Error())
+		// Check for error itself next
+		if err != nil {
+			if err.Error() != "The operation completed successfully." {
+				return 0, errors.New(PROCRUNANDWAIT + " failed. " + err.Error())
+			}
 		}
+		return 0, errors.New(PROCRUNANDWAIT + " failed r1/r2 check")
 	}
 
 	if ec != nil {
@@ -397,14 +394,14 @@ func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devi
 	// Check the result codes first
 	if r1 != 0 || r2 != 0 {
 		log.Debugln("r1 ", r1)
-		return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " could not run " + CommandLine)
-	}
-
-	// Check for error itself next
-	if err != nil {
-		if err.Error() != "The operation completed successfully." {
-			return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " failed. " + err.Error() + ". Command=" + CommandLine)
+		// Check for error itself next
+		if err != nil {
+			if err.Error() != "The operation completed successfully." {
+				return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " failed. " + err.Error() + ". Command=" + CommandLine)
+			}
 		}
+
+		return 0, errors.New(PROCCREATEPROCESSINCOMPUTESYSTEM + " could not run " + CommandLine)
 	}
 
 	if pid != nil {
@@ -468,14 +465,14 @@ func WaitForProcessInComputeSystem(ID string, ProcessId uint32) (ExitCode uint32
 	// Check the result codes first
 	if r1 != 0 || r2 != 0 {
 		log.Debugln("r1 ", r1)
-		return 0, errors.New(PROCWAITFORPROCESSINCOMPUTESYSTEM + " failed r1/r2 check")
-	}
-
-	// Check for error itself next
-	if err != nil {
-		if err.Error() != "The operation completed successfully." {
-			return 0, errors.New(PROCWAITFORPROCESSINCOMPUTESYSTEM + " failed. " + err.Error())
+		// Check for error itself next
+		if err != nil {
+			if err.Error() != "The operation completed successfully." {
+				return 0, errors.New(PROCWAITFORPROCESSINCOMPUTESYSTEM + " failed. " + err.Error())
+			}
 		}
+
+		return 0, errors.New(PROCWAITFORPROCESSINCOMPUTESYSTEM + " failed r1/r2 check")
 	}
 
 	if ec != nil {
@@ -531,14 +528,16 @@ func TerminateProcessInComputeSystem(ID string, ProcessId uint32) (err error) {
 	// Check the result codes first
 	if r1 != 0 || r2 != 0 {
 		log.Debugln("r1 ", r1)
-		return errors.New(PROCTERMINATEPROCESSINCOMPUTESYSTEM + " failed r1/r2 check")
-	}
 
-	// Check for error itself next
-	if err != nil {
-		if err.Error() != "The operation completed successfully." {
-			return errors.New(PROCTERMINATEPROCESSINCOMPUTESYSTEM + " failed. " + err.Error())
+		// Check for error itself next
+		if err != nil {
+			if err.Error() != "The operation completed successfully." {
+				return errors.New(PROCTERMINATEPROCESSINCOMPUTESYSTEM + " failed. " + err.Error())
+			}
 		}
+
+		return errors.New(PROCTERMINATEPROCESSINCOMPUTESYSTEM + " failed r1/r2 check")
+
 	}
 
 	return nil
