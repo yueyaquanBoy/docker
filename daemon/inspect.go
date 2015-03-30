@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
+	"runtime"
 
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/runconfig"
@@ -53,7 +54,9 @@ func (daemon *Daemon) ContainerInspect(job *engine.Job) engine.Status {
 	out.Set("ProcessLabel", container.ProcessLabel)
 	out.SetJson("Volumes", container.Volumes)
 	out.SetJson("VolumesRW", container.VolumesRW)
-	out.SetJson("AppArmorProfile", container.AppArmorProfile)
+	if runtime.GOOS != "windows" {
+		out.SetJson("AppArmorProfile", container.AppArmorProfile)
+	}
 
 	out.SetList("ExecIDs", container.GetExecIDs())
 
