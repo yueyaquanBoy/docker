@@ -12,6 +12,8 @@ import (
 	"sync"
 	"syscall"
 	"unsafe"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -123,6 +125,8 @@ const (
 var kernel32DLL = syscall.NewLazyDLL("kernel32.dll")
 
 var (
+	consoleLogging = len(os.Getenv("consolelogging")) > 0
+
 	setConsoleModeProc                = kernel32DLL.NewProc("SetConsoleMode")
 	getConsoleScreenBufferInfoProc    = kernel32DLL.NewProc("GetConsoleScreenBufferInfo")
 	setConsoleCursorPositionProc      = kernel32DLL.NewProc("SetConsoleCursorPosition")
@@ -1014,18 +1018,42 @@ func getTranslatedKeyCodes(inputEvents []INPUT_RECORD, escapeSequence []byte) st
 
 // ReadChars reads the characters from the given reader
 func (term *WindowsTerminal) ReadChars(fd uintptr, r io.Reader, p []byte) (n int, err error) {
+
+	if consoleLogging {
+		log.Debugln("--> Readchars: term.inputSize=", term.inputSize)
+	}
+
 	for term.inputSize == 0 {
 		nr, err := getAvailableInputEvents(fd, term.inputEvents)
 		if nr == 0 && nil != err {
+			if consoleLogging {
+				log.Debugln("<-- Readchars: from getAvailableInputEvents: nr==0 && nil !=err", err)
+			}
 			return n, err
 		}
 		if nr > 0 {
+			if consoleLogging {
+				log.Debugln("Readchars: calling getTranslatedKeyCodes()")
+			}
 			keyCodes := getTranslatedKeyCodes(term.inputEvents[:nr], term.inputEscapeSequence)
+			if consoleLogging {
+				log.Debugln("Readchars: keyCodes=", keyCodes)
+			}
+
 			term.inputSize = copy(term.inputBuffer, keyCodes)
+			if consoleLogging {
+				log.Debugln("Readchars: copied to term.inputBuffer. inputSize now=", term.inputSize)
+			}
 		}
 	}
 	n = copy(p, term.inputBuffer[:term.inputSize])
 	term.inputSize -= n
+
+	if consoleLogging {
+		log.Debugln("Readchars: After final copy of bytes ", n)
+		log.Debugln("<-- Readchars: inputsize now", term.inputSize)
+	}
+
 	return n, nil
 }
 
