@@ -415,7 +415,7 @@ func GetMountedVolumePath(path string) (string, error) {
 	script := `
     $path = "` + path + `.vhdx"
     if(Test-Path $path){
-        $vhd = Get-VHD $path -passthru
+        $vhd = Get-VHD $path
         $volume = $vhd | Get-Disk | Get-Partition | Get-Volume
         $volume.Path
     }
