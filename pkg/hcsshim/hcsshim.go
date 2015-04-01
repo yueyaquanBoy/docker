@@ -15,18 +15,12 @@ import (
 const (
 	SHIMDLL = "vmcompute.dll"
 
-	PROCCREATE                          = "CreateComputeSystem"
-	PROCSTART                           = "StartComputeSystem"
-	PROCTERMINATE                       = "TerminateComputeSystem"
-	PROCRUNANDWAIT                      = "ExecuteInComputeSystem"
+	PROCCREATECOMPUTESYSTEM             = "CreateComputeSystem"
+	PROCSTARTCOMPUTESYSTEM              = "StartComputeSystem"
 	PROCCREATEPROCESSINCOMPUTESYSTEM    = "CreateProcessInComputeSystem"
 	PROCWAITFORPROCESSINCOMPUTESYSTEM   = "WaitForProcessInComputeSystem"
+	PROCSHUTDOWNCOMPUTESYSTEM           = "ShutdownComputeSystem"
 	PROCTERMINATEPROCESSINCOMPUTESYSTEM = "TerminateProcessInComputeSystem"
-)
-
-var (
-	Start = 1
-	Stop  = 2
 )
 
 // The redirection devices as passed in from callers
@@ -54,9 +48,9 @@ type deviceInt struct {
 
 // Note that RootDevicePath MUST use \\ not \ as path separator
 
-func Create(ID string, Configuration string) error {
+func CreateComputeSystem(ID string, Configuration string) error {
 
-	log.Debugln("hcsshim::Create")
+	log.Debugln("hcsshim::CreateComputeSystem")
 	log.Debugln("ID:", ID)
 	log.Debugln("Configuration:", Configuration)
 
@@ -77,7 +71,7 @@ func Create(ID string, Configuration string) error {
 	)
 
 	// Load the DLL and get the CreateComputeSystem function
-	dll, proc, err = loadAndFind(PROCCREATE)
+	dll, proc, err = loadAndFind(PROCCREATECOMPUTESYSTEM)
 
 	// Release once used if we managed to get a handle to it
 	if dll != nil {
@@ -112,22 +106,20 @@ func Create(ID string, Configuration string) error {
 		// Check for error itself next
 		if err != nil {
 			if err.Error() != "The operation completed successfully." {
-				return errors.New(PROCCREATE + " failed. " + err.Error())
+				return errors.New(PROCCREATECOMPUTESYSTEM + " failed. " + err.Error())
 			}
 		}
 		log.Debugln("r1 ", r1)
-		return errors.New(PROCCREATE + " failed r1/r2 check")
+		return errors.New(PROCCREATECOMPUTESYSTEM + " failed r1/r2 check")
 	}
 
 	return nil
-} // Create
+} // CreateComputeSystem
 
-// Pass in hcsshim.start or hcsshim.stop
-func ChangeState(ID string, newState int) error {
+func StartComputeSystem(ID string) error {
 
-	log.Debugln("hcsshim::ChangeState")
+	log.Debugln("hcsshim::StartComputeSystem")
 	log.Debugln("ID:", ID)
-	log.Debugln("State:", newState)
 
 	var (
 		// To pass into syscall, we need uint16 pointers to the strings
@@ -147,19 +139,8 @@ func ChangeState(ID string, newState int) error {
 		err error
 	)
 
-	switch newState {
-	case Start:
-		procname = PROCSTART
-	case Stop:
-		procname = PROCTERMINATE
-	default:
-		{
-			return errors.New("Invalid newState passed to ChangeState()")
-		}
-	}
-
 	// Load the DLL and get the function
-	dll, proc, err = loadAndFind(procname)
+	dll, proc, err = loadAndFind(PROCSTARTCOMPUTESYSTEM)
 
 	// Release once used if we managed to get a handle to it
 	if dll != nil {
@@ -187,125 +168,16 @@ func ChangeState(ID string, newState int) error {
 		// Check for error itself next
 		if err != nil {
 			if err.Error() != "The operation completed successfully." {
-				return errors.New(procname + " failed. " + err.Error())
+				return errors.New(PROCSTARTCOMPUTESYSTEM + " failed. " + err.Error())
 			}
 		}
 		return errors.New(procname + " failed r1/r2 check")
 	}
 
 	return nil
-} // ChangeState
+} // StartComputeSystem
 
-// RunAndWait runs a command inside a Windows container and waits for
-// it to complete. The exit code of the command/process is returned back.
-// It is possible to interact by passing named pipes through the devices
-// parameter (eg docker run -a stdin -a stdout -a stderr -i container command)
-func RunAndWait(ID string, CommandLine string, StdDevices Devices) (ExitCode uint32, err error) {
-
-	log.Debugln("hcsshim::RunAndWait")
-	log.Debugln("ID:", ID)
-	log.Debugln("CommandLine:", CommandLine)
-
-	var (
-		// To pass into syscall, we need uint16 pointers to the strings
-		IDp          *uint16
-		CommandLinep *uint16
-
-		// Result values from calling the procedure
-		r1, r2 uintptr
-
-		// The DLL and procedure in the DLL respectively
-		dll  *syscall.DLL
-		proc *syscall.Proc
-	)
-
-	// Load the DLL and get the ExecuteInComputeSystem function
-	dll, proc, err = loadAndFind(PROCRUNANDWAIT)
-
-	// Release once used if we managed to get a handle to it
-	if dll != nil {
-		defer dll.Release()
-	}
-
-	// Check for error from loadAndFind
-	if err != nil {
-		return 0, err
-	}
-
-	// Convert ID to uint16 pointer for calling the procedure
-	IDp, err = syscall.UTF16PtrFromString(ID)
-	if err != nil {
-		log.Debugln("Failed conversion of ID to pointer ", err)
-		return 0, err
-	}
-
-	// Convert CommandLine to uint16 pointer for calling the procedure
-	CommandLinep, err = syscall.UTF16PtrFromString(CommandLine)
-	if err != nil {
-		log.Debugln("Failed conversion of CommandLine to pointer ", err)
-		return 0, err
-	}
-
-	// Need an instance of the redirection devices for internal use when calling the procedure
-	internalDevices := new(deviceInt)
-
-	// Convert stdin, if supplied to uint16 pointer for calling the procedure
-	if len(StdDevices.StdInPipe) != 0 {
-		internalDevices.stdinpipe, err = syscall.UTF16PtrFromString(StdDevices.StdInPipe)
-		if err != nil {
-			log.Debugln("Failed conversion of StdInPipe to pointer ", err)
-			return 0, err
-		}
-	}
-
-	// Convert stdout, if supplied to uint16 pointer for calling the procedure
-	if len(StdDevices.StdOutPipe) != 0 {
-		internalDevices.stdoutpipe, err = syscall.UTF16PtrFromString(StdDevices.StdOutPipe)
-		if err != nil {
-			log.Debugln("Failed conversion of StdOutPipe to pointer ", err)
-			return 0, err
-		}
-	}
-
-	// Convert stderr, if supplied to uint16 pointer for calling the procedure
-	if len(StdDevices.StdErrPipe) != 0 {
-		internalDevices.stderrpipe, err = syscall.UTF16PtrFromString(StdDevices.StdErrPipe)
-		if err != nil {
-			log.Debugln("Failed conversion of StdErrPipe to pointer ", err)
-			return 0, err
-		}
-	}
-
-	// To get a POINTER to the exit code
-	ec := new(uint32)
-
-	// Call the procedure itself.
-	r1, r2, err = proc.Call(
-		uintptr(unsafe.Pointer(IDp)),
-		uintptr(unsafe.Pointer(CommandLinep)),
-		uintptr(unsafe.Pointer(internalDevices)),
-		uintptr(unsafe.Pointer(ec)))
-
-	// Check the result codes first
-	if r1 != 0 || r2 != 0 {
-		log.Debugln("r1 ", r1)
-		// Check for error itself next
-		if err != nil {
-			if err.Error() != "The operation completed successfully." {
-				return 0, errors.New(PROCRUNANDWAIT + " failed. " + err.Error())
-			}
-		}
-		return 0, errors.New(PROCRUNANDWAIT + " failed r1/r2 check")
-	}
-
-	if ec != nil {
-		log.Debugln("hcsshim::ExecuteInComputeSystem ExitCode ", *ec)
-	}
-
-	return *ec, nil
-} // RunAndWait
-
-func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devices) (PID uint32, err error) {
+func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devices, EmulateTTY uint32) (PID uint32, err error) {
 
 	log.Debugln("hcsshim::CreateProcessInComputeSystem")
 	log.Debugln("ID:", ID)
@@ -389,6 +261,7 @@ func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devi
 		uintptr(unsafe.Pointer(IDp)),
 		uintptr(unsafe.Pointer(CommandLinep)),
 		uintptr(unsafe.Pointer(internalDevices)),
+		uintptr(EmulateTTY),
 		uintptr(unsafe.Pointer(pid)))
 
 	// Check the result codes first
@@ -542,6 +415,70 @@ func TerminateProcessInComputeSystem(ID string, ProcessId uint32) (err error) {
 
 	return nil
 } // TerminateProcessInComputeSystem
+
+func ShutdownComputeSystem(ID string) error {
+
+	log.Debugln("hcsshim::ShutdownComputeSystem")
+	log.Debugln("ID:", ID)
+
+	var (
+		// To pass into syscall, we need uint16 pointers to the strings
+		IDp *uint16
+
+		// Result values from calling the procedure
+		r1, r2 uintptr
+
+		// The DLL and procedure in the DLL respectively
+		dll  *syscall.DLL
+		proc *syscall.Proc
+
+		// The name of the procedure
+		procname string
+
+		// Error tracking
+		err error
+	)
+
+	// Load the DLL and get the function
+	dll, proc, err = loadAndFind(PROCSHUTDOWNCOMPUTESYSTEM)
+
+	// Release once used if we managed to get a handle to it
+	if dll != nil {
+		defer dll.Release()
+	}
+
+	// Check for error from loadAndFind
+	if err != nil {
+		return err
+	}
+
+	// Convert ID to uint16 pointers for calling the procedure
+	IDp, err = syscall.UTF16PtrFromString(ID)
+	if err != nil {
+		log.Debugln("Failed conversion of ID to pointer ", err)
+		return err
+	}
+
+	var timeout uint32
+	timeout = 0xffffffff
+
+	// Call the procedure itself.
+	r1, r2, err = proc.Call(uintptr(unsafe.Pointer(IDp)), uintptr(timeout))
+
+	// Check the result codes first
+	if r1 != 0 || r2 != 0 {
+		log.Debugln("r1 ", r1)
+		// Check for error itself next
+		if err != nil {
+			if err.Error() != "The operation completed successfully." {
+				return errors.New(PROCSHUTDOWNCOMPUTESYSTEM + " failed. " + err.Error())
+			}
+		}
+		return errors.New(procname + " failed r1/r2 check")
+	}
+
+	return nil
+} // ShutdownComputeSystem
 
 func loadAndFind(Procedure string) (dll *syscall.DLL, proc *syscall.Proc, err error) {
 
