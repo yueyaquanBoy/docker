@@ -86,6 +86,19 @@ func main() {
 			flag.Usage()
 			return
 		}
+
+		// Tracing to a logfile if set in environment
+		dlogfile := os.Getenv("docker_daemon_logfile")
+		if len(dlogfile) > 0 {
+			dlf, err := os.OpenFile(dlogfile, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0666)
+			if err == nil {
+				log.SetOutput(dlf)
+			} else {
+				log.Fatalf("Error opening logfile: %s", err)
+			}
+
+		}
+
 		mainDaemon()
 		return
 	}
@@ -139,6 +152,17 @@ func main() {
 		cli = client.NewDockerCli(stdin, stdout, stderr, *flTrustKey, protoAddrParts[0], protoAddrParts[1], &tlsConfig)
 	} else {
 		cli = client.NewDockerCli(stdin, stdout, stderr, *flTrustKey, protoAddrParts[0], protoAddrParts[1], nil)
+	}
+
+	// Tracing to a logfile if set in environment
+	clogfile := os.Getenv("docker_client_logfile")
+	if len(clogfile) > 0 {
+		clf, err := os.OpenFile(clogfile, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0666)
+		if err == nil {
+			log.SetOutput(clf)
+		} else {
+			log.Fatalf("Error opening logfile: %s", err)
+		}
 	}
 
 	if err := cli.Cmd(flag.Args()...); err != nil {
