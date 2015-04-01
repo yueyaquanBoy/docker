@@ -212,9 +212,9 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 
 	var emulateTTY uint32
 
-	//if c.ProcessConfig.Tty == true {
-	//	emulateTTY = 0x00000001
-	//}
+	if c.ProcessConfig.Tty == true {
+		emulateTTY = 0x00000001
+	}
 
 	err = hcsshim.CreateComputeSystem(c.ID, configuration)
 	if err != nil {
