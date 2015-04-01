@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	log "github.com/Sirupsen/logrus"
+	//	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -144,7 +144,13 @@ var (
 // types for calling various windows API
 // see http://msdn.microsoft.com/en-us/library/windows/desktop/ms682093(v=vs.85).aspx
 type (
-	SHORT      int16
+	SHORT int16
+	BOOL  int32
+	WORD  uint16
+	WCHAR uint16
+	DWORD uint32
+
+	SMALL_RECT struct {
 	SMALL_RECT struct {
 		Left   SHORT
 		Top    SHORT
@@ -156,11 +162,6 @@ type (
 		X SHORT
 		Y SHORT
 	}
-
-	BOOL  int32
-	WORD  uint16
-	WCHAR uint16
-	DWORD uint32
 
 	CONSOLE_SCREEN_BUFFER_INFO struct {
 		Size              COORD
@@ -497,7 +498,7 @@ func setConsoleCursorPosition(handle uintptr, isRelative bool, column int16, lin
 
 // http://msdn.microsoft.com/en-us/library/windows/desktop/ms683207(v=vs.85).aspx
 func getNumberOfConsoleInputEvents(handle uintptr) (uint16, error) {
-	var n WORD
+	var n DWORD // JJH FIX
 	if err := getError(getNumberOfConsoleInputEventsProc.Call(handle, uintptr(unsafe.Pointer(&n)))); err != nil {
 		return 0, err
 	}
@@ -506,7 +507,10 @@ func getNumberOfConsoleInputEvents(handle uintptr) (uint16, error) {
 
 //http://msdn.microsoft.com/en-us/library/windows/desktop/ms684961(v=vs.85).aspx
 func readConsoleInputKey(handle uintptr, inputBuffer []INPUT_RECORD) (int, error) {
-	var nr WORD
+	var nr DWORD // JJH Fix. Was WORD
+	//if consoleLogging {
+	//	log.Debugln("calling readConsoleInputProc")
+	//}
 	if err := getError(readConsoleInputProc.Call(handle, uintptr(unsafe.Pointer(&inputBuffer[0])), uintptr(len(inputBuffer)), uintptr(unsafe.Pointer(&nr)))); err != nil {
 		return 0, err
 	}
@@ -1019,40 +1023,40 @@ func getTranslatedKeyCodes(inputEvents []INPUT_RECORD, escapeSequence []byte) st
 // ReadChars reads the characters from the given reader
 func (term *WindowsTerminal) ReadChars(fd uintptr, r io.Reader, p []byte) (n int, err error) {
 
-	if consoleLogging {
-		log.Debugln("--> Readchars: term.inputSize=", term.inputSize)
-	}
+	//if consoleLogging {
+	//	log.Debugln("--> Readchars: term.inputSize=", term.inputSize)
+	//}
 
 	for term.inputSize == 0 {
 		nr, err := getAvailableInputEvents(fd, term.inputEvents)
 		if nr == 0 && nil != err {
-			if consoleLogging {
-				log.Debugln("<-- Readchars: from getAvailableInputEvents: nr==0 && nil !=err", err)
-			}
+			//if consoleLogging {
+			//	log.Debugln("<-- Readchars: from getAvailableInputEvents: nr==0 && nil !=err", err)
+			//}
 			return n, err
 		}
 		if nr > 0 {
-			if consoleLogging {
-				log.Debugln("Readchars: calling getTranslatedKeyCodes()")
-			}
+			//if consoleLogging {
+			//	log.Debugln("Readchars: calling getTranslatedKeyCodes()")
+			//}
 			keyCodes := getTranslatedKeyCodes(term.inputEvents[:nr], term.inputEscapeSequence)
-			if consoleLogging {
-				log.Debugln("Readchars: keyCodes=", keyCodes)
-			}
+			//if consoleLogging {
+			//	log.Debugln("Readchars: keyCodes=", keyCodes)
+			//}
 
 			term.inputSize = copy(term.inputBuffer, keyCodes)
-			if consoleLogging {
-				log.Debugln("Readchars: copied to term.inputBuffer. inputSize now=", term.inputSize)
-			}
+			//if consoleLogging {
+			//	log.Debugln("Readchars: copied to term.inputBuffer. inputSize now=", term.inputSize)
+			//}
 		}
 	}
 	n = copy(p, term.inputBuffer[:term.inputSize])
 	term.inputSize -= n
 
-	if consoleLogging {
-		log.Debugln("Readchars: After final copy of bytes ", n)
-		log.Debugln("<-- Readchars: inputsize now", term.inputSize)
-	}
+	//if consoleLogging {
+	//	log.Debugln("Readchars: After final copy of bytes ", n)
+	//	log.Debugln("<-- Readchars: inputsize now", term.inputSize)
+	//}
 
 	return n, nil
 }
