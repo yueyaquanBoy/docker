@@ -151,7 +151,6 @@ type (
 	DWORD uint32
 
 	SMALL_RECT struct {
-	SMALL_RECT struct {
 		Left   SHORT
 		Top    SHORT
 		Right  SHORT
