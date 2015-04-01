@@ -4,6 +4,7 @@ package winconsole
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +14,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	//	log "github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -507,9 +508,9 @@ func getNumberOfConsoleInputEvents(handle uintptr) (uint16, error) {
 //http://msdn.microsoft.com/en-us/library/windows/desktop/ms684961(v=vs.85).aspx
 func readConsoleInputKey(handle uintptr, inputBuffer []INPUT_RECORD) (int, error) {
 	var nr DWORD // JJH Fix. Was WORD
-	//if consoleLogging {
-	//	log.Debugln("calling readConsoleInputProc")
-	//}
+	if consoleLogging {
+		log.Debugln("calling readConsoleInputProc")
+	}
 	if err := getError(readConsoleInputProc.Call(handle, uintptr(unsafe.Pointer(&inputBuffer[0])), uintptr(len(inputBuffer)), uintptr(unsafe.Pointer(&nr)))); err != nil {
 		return 0, err
 	}
@@ -1022,40 +1023,41 @@ func getTranslatedKeyCodes(inputEvents []INPUT_RECORD, escapeSequence []byte) st
 // ReadChars reads the characters from the given reader
 func (term *WindowsTerminal) ReadChars(fd uintptr, r io.Reader, p []byte) (n int, err error) {
 
-	//if consoleLogging {
-	//	log.Debugln("--> Readchars: term.inputSize=", term.inputSize)
-	//}
+	if consoleLogging {
+		log.Debugln("--> Readchars: term.inputSize=", term.inputSize)
+	}
 
 	for term.inputSize == 0 {
 		nr, err := getAvailableInputEvents(fd, term.inputEvents)
 		if nr == 0 && nil != err {
-			//if consoleLogging {
-			//	log.Debugln("<-- Readchars: from getAvailableInputEvents: nr==0 && nil !=err", err)
-			//}
+			if consoleLogging {
+				log.Debugln("<-- Readchars: from getAvailableInputEvents: nr==0 && nil !=err", err)
+			}
 			return n, err
 		}
 		if nr > 0 {
-			//if consoleLogging {
-			//	log.Debugln("Readchars: calling getTranslatedKeyCodes()")
-			//}
+			if consoleLogging {
+				log.Debugln("Readchars: calling getTranslatedKeyCodes()")
+			}
 			keyCodes := getTranslatedKeyCodes(term.inputEvents[:nr], term.inputEscapeSequence)
-			//if consoleLogging {
-			//	log.Debugln("Readchars: keyCodes=", keyCodes)
-			//}
+			if consoleLogging {
+				log.Debugln("Readchars: length:", len(keyCodes))
+				log.Debugln("  " + hex.Dump([]byte(keyCodes)))
+			}
 
 			term.inputSize = copy(term.inputBuffer, keyCodes)
-			//if consoleLogging {
-			//	log.Debugln("Readchars: copied to term.inputBuffer. inputSize now=", term.inputSize)
-			//}
+			if consoleLogging {
+				log.Debugln("Readchars: copied to term.inputBuffer. inputSize now=", term.inputSize)
+			}
 		}
 	}
 	n = copy(p, term.inputBuffer[:term.inputSize])
 	term.inputSize -= n
 
-	//if consoleLogging {
-	//	log.Debugln("Readchars: After final copy of bytes ", n)
-	//	log.Debugln("<-- Readchars: inputsize now", term.inputSize)
-	//}
+	if consoleLogging {
+		log.Debugln("Readchars: After final copy of bytes ", n)
+		log.Debugln("<-- Readchars: inputsize now", term.inputSize)
+	}
 
 	return n, nil
 }
