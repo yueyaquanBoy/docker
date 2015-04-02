@@ -4,6 +4,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 // http://manpages.ubuntu.com/manpages/intrepid/man4/console_codes.4.html
@@ -145,12 +147,24 @@ func (tr *terminalReader) Read(p []byte) (n int, err error) {
 	//Implementations of Read are discouraged from returning a zero byte count
 	// with a nil error, except when len(p) == 0.
 	if len(p) == 0 {
+		if consoleLogging {
+			log.Debugln("--> terminalReader::Read() returning 0,nil")
+		}
 		return 0, nil
 	}
 	if nil == tr.emulator {
-		return tr.readFromWrappedReader(p)
+		n, err := tr.readFromWrappedReader(p)
+		if consoleLogging {
+			log.Debugln("--> terminalReader::Read() nil emulator. Returning ", n, err)
+		}
+		return n, err
 	}
-	return tr.emulator.ReadChars(tr.fd, tr.wrappedReader, p)
+	n, err = tr.emulator.ReadChars(tr.fd, tr.wrappedReader, p)
+	if consoleLogging {
+		log.Debugln("--> terminalReader::Read() with emulator. Returning ", n, err)
+	}
+	return n, err
+
 }
 
 // Close the underlying stream
