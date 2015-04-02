@@ -6,6 +6,7 @@ package argon
 import (
 	"errors"
 	"fmt"
+	"encoding/json"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
@@ -151,67 +152,32 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
-	stdDevices := hcsshim.Devices{}
 
-	// Connect stdin
-	if pipes.Stdin != nil {
-		stdDevices.StdInPipe = `\\.\pipe\docker\` + c.ID + "-stdin"
-
-		// Listen on the named pipe
-		inListen, err = npipe.Listen(stdDevices.StdInPipe)
-		if err != nil {
-			log.Debugln("Failed to listen on ", stdDevices.StdInPipe, err)
-			return execdriver.ExitStatus{ExitCode: -1}, err
-		}
-		defer inListen.Close()
-
-		// Launch a goroutine to do the accept. We do this so that we can
-		// cause an otherwise blocking goroutine to gracefully close when
-		// the caller (us) closes the listener
-		go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
-
-		// TODO c.ProcessConfig.Cmd.Stdin = stdinConn
+	type defConfig struct {
+		DefFile string
 	}
 
-	// Connect stdout
-	// TODO c.ProcessConfig.Cmd.Stdout = stdoutConn
-	stdDevices.StdOutPipe = `\\.\pipe\docker\` + c.ID + "-stdout"
-	outListen, err = npipe.Listen(stdDevices.StdOutPipe)
+	type containerInit struct {
+		SystemType string
+		Name string
+		IsDummy bool
+		VolumePath string
+		Definitions []defConfig
+	}
+
+	cu := containerInit{}
+        cu.SystemType = "Container"
+        cu.Name = c.ID
+        cu.IsDummy = c.Dummy
+        cu.VolumePath = c.Rootfs
+        cu.Definitions = []defConfig{ defConfig{"C:\\silo\\10045-base.def"} }
+
+	configurationb, err := json.Marshal(cu)
 	if err != nil {
-		log.Debugln("Failed to listen on ", stdDevices.StdOutPipe, err)
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
-	defer outListen.Close()
-	go stdouterrAccept(outListen, stdDevices.StdOutPipe, pipes.Stdout)
 
-	// Connect stderr
-	// TODO c.ProcessConfig.Cmd.Stderr = stderrConn
-	stdDevices.StdErrPipe = `\\.\pipe\docker\` + c.ID + "-stderr"
-	errListen, err = npipe.Listen(stdDevices.StdErrPipe)
-	if err != nil {
-		log.Debugln("Failed to listen on ", stdDevices.StdErrPipe, err)
-		return execdriver.ExitStatus{ExitCode: -1}, err
-	}
-	defer errListen.Close()
-	go stdouterrAccept(errListen, stdDevices.StdErrPipe, pipes.Stderr)
-
-	if c.ProcessConfig.Tty {
-		term, err = NewTtyConsole(&c.ProcessConfig, pipes)
-	} else {
-		term, err = NewStdConsole(&c.ProcessConfig, pipes)
-	}
-	c.ProcessConfig.Terminal = term
-
-	// Temporarily create a dummy container with the ID
-	configuration := `{` + "\n"
-	configuration += ` "SystemType" : "Container",` + "\n"
-	if c.Dummy {
-		configuration += ` "IsDummy" : true,` + "\n"
-	}
-
-	configuration += ` "Name" : "john",` + "\n"
-	configuration += ` "RootDevicePath" : "C:\\Containers\\test"` + "\n"
-	configuration += `}` + "\n"
+	configuration := string(configurationb)
 
 	var emulateTTY uint32
 
@@ -232,6 +198,65 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		log.Debugln("Failed to start ", err)
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
+
+	var pipePrefix string
+
+	if (c.Dummy) {
+		pipePrefix = `\\.\pipe\`
+	} else {
+		pipePrefix = fmt.Sprintf(`\\.\Containers\%s\Device\NamedPipe\`, c.ID)
+	}
+
+	stdDevices := hcsshim.Devices{}
+
+	// Connect stdin
+	if pipes.Stdin != nil {
+		stdDevices.StdInPipe = pipePrefix + c.ID + "-stdin"
+
+		// Listen on the named pipe
+		inListen, err = npipe.Listen(stdDevices.StdInPipe)
+		if err != nil {
+			log.Debugln("Failed to listen on ", stdDevices.StdInPipe, err)
+			return execdriver.ExitStatus{ExitCode: -1}, err
+		}
+		defer inListen.Close()
+
+		// Launch a goroutine to do the accept. We do this so that we can
+		// cause an otherwise blocking goroutine to gracefully close when
+		// the caller (us) closes the listener
+		go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
+
+		// TODO c.ProcessConfig.Cmd.Stdin = stdinConn
+	}
+
+	// Connect stdout
+	// TODO c.ProcessConfig.Cmd.Stdout = stdoutConn
+	stdDevices.StdOutPipe = pipePrefix + c.ID + "-stdout"
+	outListen, err = npipe.Listen(stdDevices.StdOutPipe)
+	if err != nil {
+		log.Debugln("Failed to listen on ", stdDevices.StdOutPipe, err)
+		return execdriver.ExitStatus{ExitCode: -1}, err
+	}
+	defer outListen.Close()
+	go stdouterrAccept(outListen, stdDevices.StdOutPipe, pipes.Stdout)
+
+	// Connect stderr
+	// TODO c.ProcessConfig.Cmd.Stderr = stderrConn
+	stdDevices.StdErrPipe = pipePrefix + c.ID + "-stderr"
+	errListen, err = npipe.Listen(stdDevices.StdErrPipe)
+	if err != nil {
+		log.Debugln("Failed to listen on ", stdDevices.StdErrPipe, err)
+		return execdriver.ExitStatus{ExitCode: -1}, err
+	}
+	defer errListen.Close()
+	go stdouterrAccept(errListen, stdDevices.StdErrPipe, pipes.Stderr)
+
+	if c.ProcessConfig.Tty {
+		term, err = NewTtyConsole(&c.ProcessConfig, pipes)
+	} else {
+		term, err = NewStdConsole(&c.ProcessConfig, pipes)
+	}
+	c.ProcessConfig.Terminal = term
 
 	// Start the command running in the container.
 	var pid uint32
