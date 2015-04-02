@@ -2277,6 +2277,7 @@ func (cli *DockerCli) CmdRun(args ...string) error {
 		flSigProxy   = cmd.Bool([]string{"#sig-proxy", "-sig-proxy"}, true, "Proxy received signals to the process")
 		flName       = cmd.String([]string{"#name", "-name"}, "", "Assign a name to the container")
 		flAttach     *opts.ListOpts
+		//flDummy      = flag.Bool([]string{"-dummy"}, false, "Windows dummy container mode")
 
 		ErrConflictAttachDetach               = fmt.Errorf("Conflicting options: -a and -d")
 		ErrConflictRestartPolicyAndAutoRemove = fmt.Errorf("Conflicting options: --restart and --rm")

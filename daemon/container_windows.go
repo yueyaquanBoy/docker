@@ -116,6 +116,7 @@ func populateCommand(c *Container, env []string) error {
 		MountLabel:    c.GetMountLabel(),
 		//		LxcConfig:          lxcConfig,
 		//		AppArmorProfile:    c.AppArmorProfile,
+		Dummy: c.Config.Dummy,
 	}
 
 	return nil
