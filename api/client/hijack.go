@@ -181,7 +181,14 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 	var oldState *term.State
 
+	log.Debugln("hijack: in==nil?", in == nil)
+	log.Debugln("hijack: stdout==nil?", stdout == nil)
+	log.Debugln("hijack: stderr==nil?", stderr == nil)
+	log.Debugln("hijack: setRawTerminal", setRawTerminal)
+	log.Debugln("hijack isTerminalIn", cli.isTerminalIn)
+
 	if in != nil && setRawTerminal && cli.isTerminalIn && os.Getenv("NORAW") == "" {
+		log.Debugln("hijack: Calling term.SetRawTerminal")
 		oldState, err = term.SetRawTerminal(cli.inFd)
 		if err != nil {
 			return err
@@ -190,6 +197,7 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 	}
 
 	if stdout != nil || stderr != nil {
+		log.Debugln("hijack: have stdout or stderr")
 		receiveStdout = promise.Go(func() (err error) {
 			defer func() {
 				if in != nil {
@@ -207,8 +215,12 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 			// When TTY is ON, use regular copy
 			if setRawTerminal && stdout != nil {
-				_, err = io.Copy(stdout, br)
+				log.Debugln("hijack: TTY is ON, using regular copy for stdout")
+				var n int64
+				n, err = io.Copy(stdout, br)
+				log.Debugln("hijack: io.Copy completed. Bytes copied=", n)
 			} else {
+				log.Debugln("hijack: using StdCopy for stdout/err")
 				_, err = stdcopy.StdCopy(stdout, stderr, br)
 			}
 			log.Debugf("[hijack] End of stdout")
