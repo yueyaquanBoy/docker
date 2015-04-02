@@ -973,6 +973,11 @@ func charSequenceForKeys(key WORD, controlState DWORD, escapeSequence []byte) st
 // mapKeystokeToTerminalString maps the given input event record to string
 func mapKeystokeToTerminalString(keyEvent *KEY_EVENT_RECORD, escapeSequence []byte) string {
 	_, alt, control := getControlKeys(keyEvent.ControlKeyState)
+
+	if consoleLogging {
+		log.Debugf("--> mapKeystrokeToTerminalString() alt %d control %d", alt, control)
+	}
+
 	if keyEvent.UnicodeChar == 0 {
 		return charSequenceForKeys(keyEvent.VirtualKeyCode, keyEvent.ControlKeyState, escapeSequence)
 	}
@@ -984,10 +989,15 @@ func mapKeystokeToTerminalString(keyEvent *KEY_EVENT_RECORD, escapeSequence []by
 		// <Ctrl>-S  Suspends printing on the screen (does not stop the program).
 		// <Ctrl>-U  Deletes all characters on the current line. Also called the KILL key.
 		// <Ctrl>-E  Quits current command and creates a core
-
+		if consoleLogging {
+			log.Debugln("control not being processed")
+		}
 	}
 	// <Alt>+Key generates ESC N Key
 	if !control && alt {
+		if consoleLogging {
+			log.Debugln("Is not control, but alt - Esc N processing", string(keyEvent.UnicodeChar))
+		}
 		return KEY_ESC_N + strings.ToLower(string(keyEvent.UnicodeChar))
 	}
 	return string(keyEvent.UnicodeChar)

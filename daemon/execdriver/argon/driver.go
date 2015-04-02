@@ -205,9 +205,12 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	// Temporarily create a dummy container with the ID
 	configuration := `{` + "\n"
 	configuration += ` "SystemType" : "Container",` + "\n"
+	if c.Dummy {
+		configuration += ` "IsDummy" : true,` + "\n"
+	}
+
 	configuration += ` "Name" : "john",` + "\n"
-	configuration += ` "RootDevicePath" : "C:\\Containers\\test",` + "\n"
-	configuration += ` "IsDummy" : true` + "\n"
+	configuration += ` "RootDevicePath" : "C:\\Containers\\test"` + "\n"
 	configuration += `}` + "\n"
 
 	var emulateTTY uint32
