@@ -389,7 +389,11 @@ func MountVhd(path string) (string, error) {
 
 	log.Debugln("Attempting to mount VHD '", path, ".vhdx'")
 	volumePath, err := pshell.ExecutePowerShell(script)
-	return strings.TrimSpace(volumePath), err
+	if (err != nil) {
+		return "", err
+	}
+
+	return strings.TrimRight(strings.TrimSpace(volumePath), `\`), nil
 }
 
 func DismountVhd(path string) error {
@@ -423,7 +427,11 @@ func GetMountedVolumePath(path string) (string, error) {
 
 	log.Debugln("Attempting to get mounted VHD volume path '", path, ".vhdx'")
 	volumePath, err := pshell.ExecutePowerShell(script)
-	return strings.TrimSpace(volumePath), err
+	if (err != nil) {
+		return "", err
+	}
+
+	return strings.TrimRight(strings.TrimSpace(volumePath), `\`), nil
 }
 
 func CopyVhd(src, dst string) error {

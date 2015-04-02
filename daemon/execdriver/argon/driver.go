@@ -164,7 +164,7 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		Name:        c.ID,
 		IsDummy:     c.Dummy,
 		VolumePath:  c.Rootfs,
-		Definitions: []defConfig{defConfig{"C:\\silo\\10045-base.def"}},
+		Definitions: []defConfig{defConfig{fmt.Sprintf(`%s\container.def`, c.Rootfs)}},
 	}
 
 	configurationb, err := json.Marshal(cu)
