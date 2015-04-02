@@ -26,7 +26,6 @@ func stdinAccept(inListen *npipe.PipeListener, pipeName string, copyfrom io.Read
 
 	// Wait for the pipe to be connected to by the shim
 	log.Debugln("Waiting on ", pipeName)
-	log.Debugln(inListen.Addr())
 	stdinConn, err := inListen.Accept()
 	if err != nil {
 		log.Debugln("Failed to accept: ", pipeName, err)
@@ -62,23 +61,19 @@ func stdouterrAccept(outerrListen *npipe.PipeListener, pipeName string, copyto i
 	if err != nil {
 		log.Debugln("Failed to accept: ", pipeName, err)
 		return
-
 	}
 	log.Debugln("Connected to ", outerrConn.RemoteAddr())
 
 	// Anything that comes from the container named pipe stdout/err should be copied
 	// across to the stdout/err of the client
-
 	if copyto != nil {
 		go func() {
 			defer outerrConn.Close()
-			log.Debugln("Calling io.Copy on stdout/err")
+			log.Debugln("Calling io.Copy on ", pipeName)
 			bytes, err := io.Copy(copyto, outerrConn)
 			log.Debugln("Copied bytes/err/pipe:", bytes, err, outerrConn.RemoteAddr())
 		}()
 	} else {
 		defer outerrConn.Close()
 	}
-
-	// BUGBUG We need to pass this in so we can set it: c.ProcessConfig.Cmd.Stdout = stdoutConn
 }

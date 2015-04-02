@@ -4,9 +4,9 @@
 package argon
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"encoding/json"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
@@ -122,24 +122,6 @@ func checkSupportedOptions(c *execdriver.Command) error {
 
 func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallback execdriver.StartCallback) (execdriver.ExitStatus, error) {
 
-	log.Debugln("argon::run c.")
-	log.Debugln(" - ID            : ", c.ID)
-	log.Debugln(" - RootFs        : ", c.Rootfs)
-	log.Debugln(" - InitPath      : ", c.InitPath)
-	log.Debugln(" - WorkingDir    : ", c.WorkingDir)
-	log.Debugln(" - ConfigPath    : ", c.ConfigPath)
-	log.Debugln(" - ProcessLabel  : ", c.ProcessLabel)
-
-	log.Debugln("c.ProcessConfig:")
-	log.Debugln(" args      :", c.ProcessConfig.Args)
-	log.Debugln(" arguments : ", c.ProcessConfig.Arguments)
-	log.Debugln(" entrypoint : ", c.ProcessConfig.Entrypoint)
-	log.Debugln(" cmd.args  : ", c.ProcessConfig.Cmd.Args)
-	log.Debugln(" cmd.dir  : ", c.ProcessConfig.Cmd.Dir)
-	log.Debugln(" cmd.env  : ", c.ProcessConfig.Cmd.Env)
-	log.Debugln(" cmd.extrafiles  : ", c.ProcessConfig.Cmd.ExtraFiles)
-	log.Debugln(" cmd.path  : ", c.ProcessConfig.Cmd.Path)
-
 	var (
 		term execdriver.Terminal
 		err  error
@@ -152,25 +134,25 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
-
 	type defConfig struct {
 		DefFile string
 	}
 
 	type containerInit struct {
-		SystemType string
-		Name string
-		IsDummy bool
-		VolumePath string
+		SystemType  string
+		Name        string
+		IsDummy     bool
+		VolumePath  string
 		Definitions []defConfig
 	}
 
-	cu := containerInit{}
-        cu.SystemType = "Container"
-        cu.Name = c.ID
-        cu.IsDummy = c.Dummy
-        cu.VolumePath = c.Rootfs
-        cu.Definitions = []defConfig{ defConfig{"C:\\silo\\10045-base.def"} }
+	cu := &containerInit{
+		SystemType:  "Container",
+		Name:        c.ID,
+		IsDummy:     c.Dummy,
+		VolumePath:  c.Rootfs,
+		Definitions: []defConfig{defConfig{"C:\\silo\\10045-base.def"}},
+	}
 
 	configurationb, err := json.Marshal(cu)
 	if err != nil {
@@ -178,12 +160,6 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}
 
 	configuration := string(configurationb)
-
-	var emulateTTY uint32
-
-	if c.ProcessConfig.Tty == true {
-		emulateTTY = 0x00000001
-	}
 
 	err = hcsshim.CreateComputeSystem(c.ID, configuration)
 	if err != nil {
@@ -199,14 +175,16 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
+	// We use a different pipe name between real and dummy mode in the HCS
 	var pipePrefix string
-
-	if (c.Dummy) {
+	if c.Dummy {
 		pipePrefix = `\\.\pipe\`
 	} else {
 		pipePrefix = fmt.Sprintf(`\\.\Containers\%s\Device\NamedPipe\`, c.ID)
 	}
 
+	// This is what gets passed into the exec - structure containing the
+	// names of the named pipes for stdin/out/err
 	stdDevices := hcsshim.Devices{}
 
 	// Connect stdin
@@ -225,12 +203,9 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		// cause an otherwise blocking goroutine to gracefully close when
 		// the caller (us) closes the listener
 		go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
-
-		// TODO c.ProcessConfig.Cmd.Stdin = stdinConn
 	}
 
 	// Connect stdout
-	// TODO c.ProcessConfig.Cmd.Stdout = stdoutConn
 	stdDevices.StdOutPipe = pipePrefix + c.ID + "-stdout"
 	outListen, err = npipe.Listen(stdDevices.StdOutPipe)
 	if err != nil {
@@ -240,16 +215,18 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	defer outListen.Close()
 	go stdouterrAccept(outListen, stdDevices.StdOutPipe, pipes.Stdout)
 
-	// Connect stderr
-	// TODO c.ProcessConfig.Cmd.Stderr = stderrConn
-	stdDevices.StdErrPipe = pipePrefix + c.ID + "-stderr"
-	errListen, err = npipe.Listen(stdDevices.StdErrPipe)
-	if err != nil {
-		log.Debugln("Failed to listen on ", stdDevices.StdErrPipe, err)
-		return execdriver.ExitStatus{ExitCode: -1}, err
+	// No stderr on TTY.
+	if !c.ProcessConfig.Tty {
+		// Connect stderr
+		stdDevices.StdErrPipe = pipePrefix + c.ID + "-stderr"
+		errListen, err = npipe.Listen(stdDevices.StdErrPipe)
+		if err != nil {
+			log.Debugln("Failed to listen on ", stdDevices.StdErrPipe, err)
+			return execdriver.ExitStatus{ExitCode: -1}, err
+		}
+		defer errListen.Close()
+		go stdouterrAccept(errListen, stdDevices.StdErrPipe, pipes.Stderr)
 	}
-	defer errListen.Close()
-	go stdouterrAccept(errListen, stdDevices.StdErrPipe, pipes.Stderr)
 
 	if c.ProcessConfig.Tty {
 		term, err = NewTtyConsole(&c.ProcessConfig, pipes)
@@ -258,12 +235,8 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}
 	c.ProcessConfig.Terminal = term
 
-	// Start the command running in the container.
-	var pid uint32
-	//pid, err = hcsshim.CreateProcessInComputeSystem(c.ID, "c:\\hcs\\CExecEchoProcess.exe 60", stdDevices)
-
-	// Pretty sure this would get caught earlier, but just in case
-	// validate that we have something to run
+	// Sure this would get caught earlier, but just in case - validate that we
+	// have something to run
 	if c.ProcessConfig.Entrypoint == "" {
 		err = errors.New("No entrypoint specified")
 		log.Debugln(err)
@@ -278,7 +251,14 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}
 	log.Debugln("commandLine: ", commandLine)
 
-	// Launch the process
+	// TTY or not is passed into executing a process
+	var emulateTTY uint32 = 0x00000000
+	if c.ProcessConfig.Tty == true {
+		emulateTTY = 0x00000001
+	}
+
+	// Start the command running in the container.
+	var pid uint32
 	pid, err = hcsshim.CreateProcessInComputeSystem(c.ID,
 		commandLine,
 		stdDevices,
@@ -291,10 +271,6 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	//Save the PID as we'll need this in Kill()
 	log.Debugln("PID ", pid)
 	c.ContainerPid = int(pid)
-
-	// TODO: Still not sure if I need this? JJH 3/20/15
-	//term, err = execdriver.NewStdConsole(&c.ProcessConfig, pipes)
-	//c.ProcessConfig.Terminal = term
 
 	// Invoke the start callback
 	if startCallback != nil {
@@ -315,12 +291,14 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	log.Debugln("Shutting down container ", c.ID)
 	err = hcsshim.ShutdownComputeSystem(c.ID)
 	if err != nil {
-		// IMPORTANT: Don't fail if fails to change state. It could already have been stopped through kill()
+		// IMPORTANT: Don't fail if fails to change state. It could already
+		// have been stopped through kill().
 		// Otherwise, the docker daemon will hang in job wait()
-		//log.Debugln("Failed to stop ", err)
-		//return execdriver.ExitStatus{ExitCode: -1}, err
+		log.Debugln("Ignoring error from ShutdownComputeSystem ", err)
+		err = nil
 	}
 
+	log.Debugln("Exiting Run() with ExitCode 0", c.ID)
 	return execdriver.ExitStatus{ExitCode: 0}, nil
 }
 
@@ -335,17 +313,17 @@ func (d *driver) Kill(p *execdriver.Command, sig int) error {
 }
 
 func kill(ID string, PID int) error {
-	log.Debugln("kill() ", ID)
-	log.Debugln("PID", PID)
+	log.Debugln("kill() ", ID, PID)
 
-	// TODO Terminate Process
+	// Terminate Process
 	err := hcsshim.TerminateProcessInComputeSystem(ID, uint32(PID))
 	if err != nil {
-		log.Debugln("Failed to Terminate ", err)
+		log.Debugln("Ignoring error, but failed to terminate process", err)
 		// Ignore errors
 		err = nil
 	}
 
+	// Shutdown the compute system
 	err = hcsshim.ShutdownComputeSystem(ID)
 	if err != nil {
 		log.Debugln("Failed to kill ", ID)
@@ -355,16 +333,16 @@ func kill(ID string, PID int) error {
 }
 
 func (d *driver) Pause(c *execdriver.Command) error {
-	return fmt.Errorf("Windows containers cannot be paused")
+	return fmt.Errorf("Windows: Containers cannot be paused")
 }
 
 func (d *driver) Unpause(c *execdriver.Command) error {
-	return fmt.Errorf("Windows containers cannot be paused")
+	return fmt.Errorf("Windows: Containers cannot be paused")
 }
 
 func (i *info) IsRunning() bool {
 	var running bool
-	running = true // TODO
+	running = true // TODO  4/2/15 Asked Lars for an HCS API
 	return running
 }
 
@@ -388,5 +366,5 @@ func (d *driver) Clean(id string) error {
 }
 
 func (d *driver) Stats(id string) (*execdriver.ResourceStats, error) {
-	return nil, fmt.Errorf("Stats() not implemented")
+	return nil, fmt.Errorf("Windows: Stats not implemented")
 }
