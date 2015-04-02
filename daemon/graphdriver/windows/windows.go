@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
+	"github.com/docker/docker/pkg/hcsshim"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/pshell"
 	"github.com/docker/docker/pkg/system"
@@ -337,101 +338,28 @@ func CreateBaseVhd(id string, folder string) error {
 }
 
 func CreateDiffVhd(id string, folder string, parent string) error {
-	// This script will create a diff disk VHD as a peer of the given folder,
-	// using the parent as the parent disk.
-	// NOTE: the indentation must be spaces and not tabs, otherwise
-	// the powershell invocation will fail.
-	script := `
-    $name = "` + id + `"
-    $folder = "` + folder + `"
-    $parentDisk = "` + parent + `.vhdx"
-    $path = "$(Split-Path $folder)\$name.vhdx"
-    function throwifnull {
-        if ($args[0] -eq $null){
-            throw
-        }
-    }
-    try {
-        $vhd = New-VHD -Path $path -ParentPath $parentDisk -Diff
-        throwifnull $vhd
-        $mounted = $vhd | Mount-VHD -Passthru
-        throwifnull $mounted
-        $mounted | Get-Disk | Set-Disk -IsOffline $false
-        $volume = $mounted | Get-Disk | Get-Partition | Get-Volume
-        throwifnull $volume
-        mountvol $folder $volume.Path
-        Dismount-VHD $mounted.Path
-    }catch{
-        if ($mounted){Dismount-VHD $mounted.Path}
-        if (Test-Path $path){rm $path}
-        throw
-    }
-    `
+	newVhdPath := filepath.Join(filepath.Dir(folder), id) + ".vhdx"
+	parentVhdPath := parent + ".vhdx"
 
-	log.Debugln("Attempting to create diff vhdx named '", id, "'at'", folder, "'")
-	_, err := pshell.ExecutePowerShell(script)
-	return err
+	return hcsshim.CreateDiffVhd(newVhdPath, parentVhdPath)
 }
 
 func MountVhd(path string) (string, error) {
-	// This script will mount the given VHD.
-	// NOTE: the indentation must be spaces and not tabs, otherwise the
-	// powershell invocation will fail.
-	script := `
-    $path = "` + path + `.vhdx"
-    if(Test-Path $path){
-        $mounted = Mount-VHD $path -passthru
-        $mounted | Get-Disk | Set-Disk -IsOffline $false
-        $volume = $mounted | Get-Disk | Get-Partition | Get-Volume
-        $volume.Path
-    }
-    `
+	vhdPath := path + ".vhdx"
 
-	log.Debugln("Attempting to mount VHD '", path, ".vhdx'")
-	volumePath, err := pshell.ExecutePowerShell(script)
-	if (err != nil) {
-		return "", err
-	}
-
-	return strings.TrimRight(strings.TrimSpace(volumePath), `\`), nil
+	return hcsshim.MountVhd(vhdPath)
 }
 
 func DismountVhd(path string) error {
-	// This script will dismount the given VHD.
-	// NOTE: the indentation must be spaces and not tabs, otherwise the
-	// powershell invocation will fail.
-	script := `
-    $path = "` + path + `.vhdx"
-    if(Test-Path $path){
-        Dismount-VHD $path
-    }
-    `
+	vhdPath := path + ".vhdx"
 
-	log.Debugln("Attempting to dismount VHD '", path, ".vhdx'")
-	_, err := pshell.ExecutePowerShell(script)
-	return err
+	return hcsshim.DismountVhd(vhdPath)
 }
 
 func GetMountedVolumePath(path string) (string, error) {
-	// This script will get the mounted VHD volume path.
-	// NOTE: the indentation must be spaces and not tabs, otherwise the
-	// powershell invocation will fail.
-	script := `
-    $path = "` + path + `.vhdx"
-    if(Test-Path $path){
-        $vhd = Get-VHD $path
-        $volume = $vhd | Get-Disk | Get-Partition | Get-Volume
-        $volume.Path
-    }
-    `
+	vhdPath := path + ".vhdx"
 
-	log.Debugln("Attempting to get mounted VHD volume path '", path, ".vhdx'")
-	volumePath, err := pshell.ExecutePowerShell(script)
-	if (err != nil) {
-		return "", err
-	}
-
-	return strings.TrimRight(strings.TrimSpace(volumePath), `\`), nil
+	return hcsshim.GetVhdVolumePath(vhdPath)
 }
 
 func CopyVhd(src, dst string) error {
