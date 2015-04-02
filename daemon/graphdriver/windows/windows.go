@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -388,7 +389,7 @@ func MountVhd(path string) (string, error) {
 
 	log.Debugln("Attempting to mount VHD '", path, ".vhdx'")
 	volumePath, err := pshell.ExecutePowerShell(script)
-	return volumePath, err
+	return strings.TrimSpace(volumePath), err
 }
 
 func DismountVhd(path string) error {
@@ -422,7 +423,7 @@ func GetMountedVolumePath(path string) (string, error) {
 
 	log.Debugln("Attempting to get mounted VHD volume path '", path, ".vhdx'")
 	volumePath, err := pshell.ExecutePowerShell(script)
-	return volumePath, err
+	return strings.TrimSpace(volumePath), err
 }
 
 func CopyVhd(src, dst string) error {
