@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
@@ -27,9 +28,15 @@ var (
 	inListen, outListen, errListen *npipe.PipeListener
 )
 
+type activeContainer struct {
+	command *execdriver.Command
+}
+
 type driver struct {
-	root     string
-	initPath string
+	root             string
+	initPath         string
+	activeContainers map[string]*activeContainer
+	sync.Mutex
 }
 
 type info struct {
@@ -38,14 +45,20 @@ type info struct {
 }
 
 func NewDriver(root, initPath string) (*driver, error) {
-
 	return &driver{
-		root:     root,
-		initPath: initPath,
+		root:             root,
+		initPath:         initPath,
+		activeContainers: make(map[string]*activeContainer),
 	}, nil
 }
 
 func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessConfig, pipes *execdriver.Pipes, startCallback execdriver.StartCallback) (int, error) {
+
+	active := d.activeContainers[c.ID]
+	if active == nil {
+		return -1, fmt.Errorf("No active container exists with ID %s", c.ID)
+	}
+
 	return 0, nil
 }
 
@@ -272,6 +285,14 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	log.Debugln("PID ", pid)
 	c.ContainerPid = int(pid)
 
+	// Maintain our list of active containers. We'll need this later for exec
+	// and other commands.
+	d.Lock()
+	d.activeContainers[c.ID] = &activeContainer{
+		command: c,
+	}
+	d.Unlock()
+
 	// Invoke the start callback
 	if startCallback != nil {
 		startCallback(&c.ProcessConfig, int(pid))
@@ -358,6 +379,14 @@ func (d *driver) Name() string {
 }
 
 func (d *driver) GetPidsForContainer(id string) ([]int, error) {
+	d.Lock()
+	//active := d.activeContainers[id]
+	d.Unlock()
+
+	// TODO This is wrong, but a start. Need to do this still.
+	//var processes []int
+	//processes[0] = int(d.activeContainers[id].command.Pid)
+
 	return nil, fmt.Errorf("GetPidsForContainer: GetPidsForContainer() not implemented")
 }
 
