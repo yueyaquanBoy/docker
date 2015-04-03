@@ -67,7 +67,7 @@ func (e *execStore) List() []string {
 }
 
 func (execConfig *execConfig) Resize(h, w int) error {
-	return execConfig.ProcessConfig.Terminal.Resize(h, w)
+	return execConfig.ProcessConfig.Terminal.Resize(execConfig.Container.ID, h, w)
 }
 
 func (d *Daemon) registerExecCommand(execConfig *execConfig) {

@@ -35,7 +35,7 @@ type Info interface {
 // the core
 type Terminal interface {
 	io.Closer
-	Resize(height, width int) error
+	Resize(ID string, height, width int) error
 }
 
 type TtyTerminal interface {

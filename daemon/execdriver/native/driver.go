@@ -364,7 +364,7 @@ func (t *TtyConsole) Master() libcontainer.Console {
 	return t.console
 }
 
-func (t *TtyConsole) Resize(h, w int) error {
+func (t *TtyConsole) Resize(ID string, h, w int) error {
 	return term.SetWinsize(t.console.Fd(), &term.Winsize{Height: uint16(h), Width: uint16(w)})
 }
 

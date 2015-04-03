@@ -15,9 +15,9 @@ func NewTtyConsole(ID string) (*TtyConsole, error) {
 	return tty, nil
 }
 
-func (t *TtyConsole) Resize(h, w int) error {
+func (t *TtyConsole) Resize(ID string, h, w int) error {
 	// We need to tell the virtual TTY via HCS that the client has resized.
-	return hcsshim.ResizeTTY("12345", h, w)
+	return hcsshim.ResizeTTY(ID, h, w)
 }
 
 func (t *TtyConsole) Close() error {
