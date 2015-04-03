@@ -96,6 +96,9 @@ func (tw *terminalWriter) Write(p []byte) (n int, err error) {
 					// found the last command character.
 					// Now we have a complete command.
 					nchar, err := tw.emulator.HandleOutputCommand(tw.fd, tw.command)
+					if consoleLogging && err != nil {
+						log.Debugln("Error from emulator.HandleOutputCommand ", err)
+					}
 					totalWritten += nchar
 					if err != nil {
 						return totalWritten, err

@@ -593,6 +593,16 @@ func getWindowsTextAttributeForAnsiValue(originalFlag WORD, defaultValue WORD, a
 	return flag, nil
 }
 
+// Debug logging that dumps out screen buffer information
+func dumpScreenBufferInfo(sbi *CONSOLE_SCREEN_BUFFER_INFO) {
+	log.Debugf("     Attr: %d CPos: (%d,%d) MaxWin: (%d,%d) Size: (%d,%d) Win TBLR (%d,%d,%d,%d)",
+		sbi.Attributes,
+		sbi.CursorPosition.X, sbi.CursorPosition.Y,
+		sbi.MaximumWindowSize.X, sbi.MaximumWindowSize.Y,
+		sbi.Size.X, sbi.Size.Y,
+		sbi.Window.Top, sbi.Window.Bottom, sbi.Window.Left, sbi.Window.Right)
+}
+
 // HandleOutputCommand interpretes the Ansi commands and then makes appropriate Win32 calls
 func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte) (n int, err error) {
 	// always consider all the bytes in command, processed
@@ -606,6 +616,11 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 
 	switch parsedCommand.Command {
 	case "m":
+
+		if consoleLogging {
+			log.Debugln("ANSI: Set Graphics Mode")
+		}
+
 		// [Value;...;Valuem
 		// Set Graphics Mode:
 		// Calls the graphics functions specified by the following values.
@@ -613,6 +628,9 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 		// Graphics mode changes the colors and attributes of text (such as bold and underline) displayed on the screen.
 		screenBufferInfo, err := GetConsoleScreenBufferInfo(handle)
 		if err != nil {
+			if consoleLogging {
+				log.Debugln("ANSI: Failure from GetConsoleScreenBufferInfo", err)
+			}
 			return n, err
 		}
 		flag := screenBufferInfo.Attributes
@@ -623,38 +641,81 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			} else {
 				flag, err = getWindowsTextAttributeForAnsiValue(flag, term.screenBufferInfo.Attributes, int16(value))
 				if err != nil {
+					if consoleLogging {
+						log.Debugln("ANSI: Failure from GetWindowsTextAttributeForAnsiValue", err)
+					}
 					return n, err
 				}
 			}
 		}
+		if consoleLogging {
+			log.Debugln("ANSI: Attribute value for console (see CONSOLE_SCREEN_BUFFER_INFO): ", flag)
+		}
 		if err := setConsoleTextAttribute(handle, flag); err != nil {
+			if consoleLogging {
+				log.Debugln("ANSI: Failure from setConsoleTextAttribute", err)
+			}
 			return n, err
 		}
 	case "H", "f":
+
+		if consoleLogging {
+			log.Debugln("ANSI: Move to position")
+		}
+
 		// [line;columnH
 		// [line;columnf
 		// Moves the cursor to the specified position (coordinates).
 		// If you do not specify a position, the cursor moves to the home position at the upper-left corner of the screen (line 0, column 0).
 		screenBufferInfo, err := GetConsoleScreenBufferInfo(handle)
 		if err != nil {
+			if consoleLogging {
+				log.Debugln("ANSI: Failure from GetConsoleScreenBufferInfo", err)
+			}
 			return n, err
 		}
+
+		if consoleLogging {
+			dumpScreenBufferInfo(screenBufferInfo)
+		}
+
 		line, err := parseInt16OrDefault(parsedCommand.getParam(0), 1)
 		if err != nil {
+			if consoleLogging {
+				log.Debugln("ANSI: Failure from parseInt16OrDefault on line", err)
+			}
 			return n, err
 		}
+
 		if line > int16(screenBufferInfo.Window.Bottom) {
+			if consoleLogging {
+				log.Debugln("ANSI: Line is > bottom, so updating to bottom: ", line, int16(screenBufferInfo.Window.Bottom))
+			}
 			line = int16(screenBufferInfo.Window.Bottom)
 		}
 		column, err := parseInt16OrDefault(parsedCommand.getParam(1), 1)
 		if err != nil {
+			if consoleLogging {
+				log.Debugln("ANSI: Failure from parseInt16OrDefault on column", err)
+			}
 			return n, err
 		}
-		if column > int16(screenBufferInfo.Window.Right) {
+		if column-1 > int16(screenBufferInfo.Window.Right) {
+			if consoleLogging {
+				log.Debugln("ANSI: column is > right, so updating to right: ", line, int16(screenBufferInfo.Window.Right))
+			}
 			column = int16(screenBufferInfo.Window.Right)
 		}
+
+		if consoleLogging {
+			log.Debugln("ANSI: Calling setConsoleCursorPosition to ", column-1, line-1)
+		}
+
 		// The numbers are not 0 based, but 1 based
 		if err := setConsoleCursorPosition(handle, false, column-1, line-1); err != nil {
+			if consoleLogging {
+				log.Debugln("ANSI: Failure from setConsoleCursorPosition", err)
+			}
 			return n, err
 		}
 
