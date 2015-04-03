@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	//	"strings"
 	"sync"
 	"time"
 
@@ -363,16 +362,8 @@ func GetMountedVolumePath(path string) (string, error) {
 }
 
 func CopyVhd(src, dst string) error {
-	// This script will overwrite the destination VHD with a copy of the source.
-	// NOTE: the indentation must be spaces and not tabs, otherwise the
-	// powershell invocation will fail.
-	script := `
-    $src = "` + src + `.vhdx"
-    $dst = "` + dst + `.vhdx"
-    cp $src $dst
-    `
+	srcPath := src + ".vhdx"
+	dstPath := dst + ".vhdx"
 
-	log.Debugln("Attempting to overwrite VHD '", src, ".vhdx' with '", dst, ".vhdx'")
-	_, err := pshell.ExecutePowerShell(script)
-	return err
+	return chrootarchive.CopyFileWithTar(srcPath, dstPath)
 }
