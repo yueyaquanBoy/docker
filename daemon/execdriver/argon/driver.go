@@ -151,11 +151,15 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}
 
 	cu := &containerInit{
-		SystemType:  "Container",
-		Name:        c.ID,
-		IsDummy:     c.Dummy,
-		VolumePath:  c.Rootfs,
-		Definitions: []defConfig{defConfig{fmt.Sprintf(`%s\container.def`, c.Rootfs)}},
+		SystemType: "Container",
+		Name:       c.ID,
+		IsDummy:    c.Dummy,
+		VolumePath: c.Rootfs,
+	}
+
+	// Dummy mode will balk if the definitions are configured
+	if !c.Dummy {
+		cu.Definitions = []defConfig{defConfig{fmt.Sprintf(`%s\container.def`, c.Rootfs)}}
 	}
 
 	configurationb, err := json.Marshal(cu)
