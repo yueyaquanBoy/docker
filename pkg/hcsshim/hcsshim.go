@@ -482,8 +482,7 @@ func ShutdownComputeSystem(ID string) error {
 } // ShutdownComputeSystem
 
 func ResizeTTY(ID string, h, w int) error {
-	log.Debugln("hcsshim::ResizeTTY")
-	log.Debugln("ID:", ID)
+	log.Debugf("hcsshim::ResizeTTY %s (%d,%d)", ID, h, w)
 
 	var (
 		// To pass into syscall, we need uint16 pointers to the strings

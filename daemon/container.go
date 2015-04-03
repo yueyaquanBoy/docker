@@ -402,7 +402,7 @@ func (container *Container) Resize(h, w int) error {
 	if !container.IsRunning() {
 		return fmt.Errorf("Cannot resize container %s, container is not running", container.ID)
 	}
-	return container.command.ProcessConfig.Terminal.Resize(h, w)
+	return container.command.ProcessConfig.Terminal.Resize(container.ID, h, w)
 }
 
 func (container *Container) Export() (archive.Archive, error) {

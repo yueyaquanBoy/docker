@@ -35,7 +35,7 @@ func (s *StdConsole) AttachPipes(command *exec.Cmd, pipes *Pipes) error {
 	return nil
 }
 
-func (s *StdConsole) Resize(h, w int) error {
+func (s *StdConsole) Resize(ID string, h, w int) error {
 	// we do not need to reside a non tty
 	return nil
 }

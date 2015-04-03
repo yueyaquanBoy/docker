@@ -11,7 +11,7 @@ func NewStdConsole(ID string) (*StdConsole, error) {
 	return &StdConsole{}, nil
 }
 
-func (s *StdConsole) Resize(h, w int) error {
+func (s *StdConsole) Resize(ID string, h, w int) error {
 	// we do not need to resize a non tty
 	return nil
 }
