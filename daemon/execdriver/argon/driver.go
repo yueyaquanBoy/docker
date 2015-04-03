@@ -237,9 +237,9 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}
 
 	if c.ProcessConfig.Tty {
-		term, err = NewTtyConsole(&c.ProcessConfig, pipes)
+		term, err = NewTtyConsole(c.ID)
 	} else {
-		term, err = NewStdConsole(&c.ProcessConfig, pipes)
+		term, err = NewStdConsole(c.ID)
 	}
 	c.ProcessConfig.Terminal = term
 
@@ -464,9 +464,9 @@ func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessCo
 	}
 
 	if c.ProcessConfig.Tty {
-		term, err = NewTtyConsole(&c.ProcessConfig, pipes)
+		term, err = NewTtyConsole(c.ID)
 	} else {
-		term, err = NewStdConsole(&c.ProcessConfig, pipes)
+		term, err = NewStdConsole(c.ID)
 	}
 	processConfig.Terminal = term
 
