@@ -2,16 +2,13 @@
 
 package argon
 
-import (
-	"github.com/docker/docker/daemon/execdriver"
-)
+import ()
 
 type StdConsole struct {
 }
 
-func NewStdConsole(processConfig *execdriver.ProcessConfig, pipes *execdriver.Pipes) (*StdConsole, error) {
-	std := &StdConsole{}
-	return std, nil
+func NewStdConsole(ID string) (*StdConsole, error) {
+	return &StdConsole{}, nil
 }
 
 func (s *StdConsole) Resize(h, w int) error {

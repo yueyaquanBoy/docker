@@ -3,23 +3,21 @@
 package argon
 
 import (
-	log "github.com/Sirupsen/logrus"
-	"github.com/docker/docker/daemon/execdriver"
+	"github.com/docker/docker/pkg/hcsshim"
 )
 
 type TtyConsole struct {
+	ID string
 }
 
-func NewTtyConsole(processConfig *execdriver.ProcessConfig, pipes *execdriver.Pipes) (*TtyConsole, error) {
-	tty := &TtyConsole{}
+func NewTtyConsole(ID string) (*TtyConsole, error) {
+	tty := &TtyConsole{ID: ID}
 	return tty, nil
 }
 
 func (t *TtyConsole) Resize(h, w int) error {
-	log.Debugln("Windows exec ttyconsole: resize not implemented ", h, w)
-	// This needs a call into the HCS to set the virtual TTY.
-	//return term.SetWinsize(t.MasterPty.Fd(), &term.Winsize{Height: uint16(h), Width: uint16(w)})
-	return nil
+	// We need to tell the virtual TTY via HCS that the client has resized.
+	return hcsshim.ResizeTTY("12345", h, w)
 }
 
 func (t *TtyConsole) Close() error {
