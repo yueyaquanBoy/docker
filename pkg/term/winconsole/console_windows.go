@@ -691,7 +691,8 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			if consoleLogging {
 				log.Debugln("ANSI: Line is > bottom, so updating to bottom: ", line, int16(screenBufferInfo.Window.Bottom))
 			}
-			line = int16(screenBufferInfo.Window.Bottom)
+			// Bugfix JJH: As SBI is zero indexed, it's +1
+			line = int16(screenBufferInfo.Window.Bottom) + 1
 		}
 		column, err := parseInt16OrDefault(parsedCommand.getParam(1), 1)
 		if err != nil {
@@ -704,7 +705,8 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			if consoleLogging {
 				log.Debugln("ANSI: column is > right, so updating to right: ", line, int16(screenBufferInfo.Window.Right))
 			}
-			column = int16(screenBufferInfo.Window.Right)
+			// Bugfix JJH: As SBI is zero indexed, it's +1
+			column = int16(screenBufferInfo.Window.Right) + 1
 		}
 
 		if consoleLogging {
