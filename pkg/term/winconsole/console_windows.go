@@ -722,6 +722,11 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 		}
 
 	case "A":
+
+		if consoleLogging {
+			log.Debugln("ANSI: Move cursor up without changing columns")
+		}
+
 		// [valueA
 		// Moves the cursor up by the specified number of lines without changing columns.
 		// If the cursor is already on the top line, ignores this sequence.
@@ -733,6 +738,11 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			return n, err
 		}
 	case "B":
+
+		if consoleLogging {
+			log.Debugln("ANSI: Move cursor down without changing columns")
+		}
+
 		// [valueB
 		// Moves the cursor down by the specified number of lines without changing columns.
 		// If the cursor is already on the bottom line, ignores this sequence.
@@ -744,6 +754,11 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			return n, err
 		}
 	case "C":
+
+		if consoleLogging {
+			log.Debugln("ANSI: Move cursor forward without changing lines")
+		}
+
 		// [valueC
 		// Moves the cursor forward by the specified number of columns without changing lines.
 		// If the cursor is already in the rightmost column, ignores this sequence.
@@ -755,6 +770,11 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			return n, err
 		}
 	case "D":
+
+		if consoleLogging {
+			log.Debugln("ANSI: Move cursor back without changing lines")
+		}
+
 		// [valueD
 		// Moves the cursor back by the specified number of columns without changing lines.
 		// If the cursor is already in the leftmost column, ignores this sequence.
@@ -766,6 +786,11 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			return n, err
 		}
 	case "J":
+
+		if consoleLogging {
+			log.Debugln("ANSI: Erase of some kind")
+		}
+
 		// [J   Erases from the cursor to the end of the screen, including the cursor position.
 		// [1J  Erases from the beginning of the screen to the cursor, including the cursor position.
 		// [2J  Erases the complete display. The cursor does not move.
@@ -817,6 +842,11 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			return n, err
 		}
 	case "K":
+
+		if consoleLogging {
+			log.Debugln("ANSI: Clear of some kind")
+		}
+
 		// [K
 		// Clears all characters from the cursor position to the end of the line (including the character at the cursor position).
 		// [K  Erases from the cursor to the end of the line, including the cursor position.
@@ -868,7 +898,13 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 		}
 
 	case "l":
+
 		for _, value := range parsedCommand.Parameters {
+
+			if consoleLogging {
+				log.Debugln("ANSI: l command", value)
+			}
+
 			switch value {
 			case "?25", "25":
 				SetCursorVisible(uintptr(handle), BOOL(0))
@@ -881,6 +917,11 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 		}
 	case "h":
 		for _, value := range parsedCommand.Parameters {
+
+			if consoleLogging {
+				log.Debugln("ANSI: h command", value)
+			}
+
 			switch value {
 			case "?25", "25":
 				SetCursorVisible(uintptr(handle), BOOL(1))
@@ -894,6 +935,11 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 		}
 
 	case "]":
+
+		if consoleLogging {
+			log.Debugln("ANSI: ] command")
+		}
+
 		/*
 			TODO (azlinux):
 				Linux Console Private CSI Sequences
@@ -914,6 +960,12 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			       ESC [ 14 ; n ]      Set the VESA powerdown interval in minutes.
 
 		*/
+
+	default:
+		if consoleLogging {
+			log.Debugln("ANSI: unhandled command", parsedCommand.Command)
+		}
+
 	}
 	return n, nil
 }
