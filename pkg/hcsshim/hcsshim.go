@@ -254,7 +254,8 @@ func ShutdownComputeSystem(ID string) error {
 } // ShutdownComputeSystem
 
 func ResizeTTY(ID string, h, w int) error {
-	log.Debugf("hcsshim::ResizeTTY %s (%d,%d)", ID, h, w)
+	log.Debugf("hcsshim::ResizeTTY %s (%d,%d) - NOT IMPLEMENTED", ID, h, w)
+	return nil
 
 	// Make sure ResizeTTY is supported
 	err := procResizeTTY.Find()
