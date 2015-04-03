@@ -72,7 +72,7 @@ func (d *DiffDiskDriver) Create(id, parent string) error {
 
 	dir := d.dir(id)
 	log.Debugln("dir=", dir)
-	if err := os.MkdirAll(filepath.Dir(dir), 0700); err != nil {
+	if err := system.MkdirAll(filepath.Dir(dir), 0700); err != nil {
 		return err
 	}
 	if err := os.Mkdir(dir, 0755); err != nil {

@@ -10,6 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/chrootarchive"
+	"github.com/docker/docker/pkg/system"
 	"github.com/docker/libcontainer/label"
 )
 
@@ -65,7 +66,7 @@ func (d *Driver) Create(id, parent string) error {
 
 	dir := d.dir(id)
 	log.Debugln("dir=", dir)
-	if err := os.MkdirAll(filepath.Dir(dir), 0700); err != nil {
+	if err := system.MkdirAll(filepath.Dir(dir), 0700); err != nil {
 		return err
 	}
 	if err := os.Mkdir(dir, 0755); err != nil {

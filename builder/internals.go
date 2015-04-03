@@ -684,7 +684,7 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+	if err := system.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 		return err
 	}
 	if err := chrootarchive.CopyWithTar(origPath, destPath); err != nil {
