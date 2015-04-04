@@ -67,11 +67,14 @@ func createTarFile(path, extractDir string, hdr *tar.Header, reader io.Reader, L
 		// Source is regular file
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, hdrInfo.Mode())
 		if err != nil {
-			//	return err		// Temporary workaround on Windows.
+			return err
 		}
 		if _, err := io.Copy(file, reader); err != nil {
 			file.Close()
-			//return err	// Temporary workaround on Windows
+			return err
+		}
+		if err := file.Sync(); err != nil {
+			return err
 		}
 		file.Close()
 
