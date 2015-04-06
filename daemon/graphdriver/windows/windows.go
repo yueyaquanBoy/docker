@@ -296,8 +296,16 @@ func (d *DiffDiskDriver) CopyDiff(sourceId, id string) error {
 
 	if d.active[sourceId] != 0 {
 		log.Warnf("Committing active id %s", id)
-		DismountVhd(sourceId)
-		defer MountVhd(sourceId)
+		err := DismountVhd(d.dir(sourceId))
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_, err := MountVhd(d.dir(sourceId))
+			if err != nil {
+				log.Warnf("Failed to remount VHD: %s", err)
+			}
+		}()
 	}
 
 	if err := os.Mkdir(d.dir(id), 0755); err != nil {

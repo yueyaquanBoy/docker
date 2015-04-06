@@ -73,9 +73,6 @@ func createTarFile(path, extractDir string, hdr *tar.Header, reader io.Reader, L
 			file.Close()
 			return err
 		}
-		if err := file.Sync(); err != nil {
-			return err
-		}
 		file.Close()
 
 	case tar.TypeBlock, tar.TypeChar, tar.TypeFifo:
