@@ -613,7 +613,11 @@ func (b *Builder) checkPathForAddition(orig string) error {
 		}
 		return err
 	}
-	if !strings.HasPrefix(origPath, b.contextPath) {
+	contextPath, err := filepath.EvalSymlinks(b.contextPath)
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(origPath, contextPath) {
 		return fmt.Errorf("Forbidden path outside the build context: %s (%s)", orig, origPath)
 	}
 	if _, err := os.Stat(origPath); err != nil {
