@@ -610,6 +610,10 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 
 	parsedCommand := parseAnsiCommand(command)
 
+	if consoleLogging {
+		log.Debugf("ANSI: HandleOutputCommand len %d command %s", n, command)
+	}
+
 	// console settings changes need to happen in atomic way
 	term.outMutex.Lock()
 	defer term.outMutex.Unlock()
@@ -677,6 +681,7 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 
 		if consoleLogging {
 			dumpScreenBufferInfo(screenBufferInfo)
+			log.Debugf("parsedCommand '%s' params '%s'", parsedCommand.Command, parsedCommand.Parameters)
 		}
 
 		line, err := parseInt16OrDefault(parsedCommand.getParam(0), 1)
