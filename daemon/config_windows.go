@@ -47,6 +47,8 @@ func (config *Config) InstallFlags() {
 	flag.StringVar(&config.Root, []string{"g", "-graph"}, os.Getenv("temp")+string(os.PathSeparator)+"docker", "Path to the root of the Docker runtime")
 	flag.StringVar(&config.ExecDriver, []string{"e", "-exec-driver"}, "argon", "Exec driver to use")
 
+	flag.StringVar(&config.BridgeIface, []string{"b", "-bridge"}, "", "Attach containers to a network bridge")
+
 	flag.BoolVar(&config.AutoRestart, []string{"#r", "#-restart"}, true, "--restart on the daemon has been deprecated in favor of --restart policies on docker run")
 	flag.BoolVar(&config.InterContainerCommunication, []string{"#icc", "-icc"}, true, "Enable inter-container communication")
 	flag.StringVar(&config.GraphDriver, []string{"s", "-storage-driver"}, "", "Storage driver to use")

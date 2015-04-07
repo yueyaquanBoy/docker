@@ -6,6 +6,14 @@ import (
 	"github.com/docker/docker/engine"
 )
 
+const (
+	DefaultNetworkBridge = "Virtual Switch"
+)
+
+var (
+	bridgeIface string
+)
+
 func InitDriver(job *engine.Job) engine.Status {
 	log.Debugln("NetworkDriver-Windows Init()")
 	for name, f := range map[string]engine.Handler{
@@ -18,12 +26,24 @@ func InitDriver(job *engine.Job) engine.Status {
 			return job.Error(err)
 		}
 	}
+
+	bridgeIface = job.Getenv("BridgeIface")
+	if bridgeIface == "" {
+		bridgeIface = DefaultNetworkBridge
+	}
+
 	return engine.StatusOK
 }
 
 // Allocate a network interface
 func Allocate(job *engine.Job) engine.Status {
 	log.Debugln("NetworkDriver-Windows Allocate()")
+
+	out := engine.Env{}
+	out.Set("Bridge", bridgeIface)
+
+	out.WriteTo(job.Stdout)
+
 	return engine.StatusOK
 }
 

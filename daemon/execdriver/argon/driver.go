@@ -142,12 +142,23 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		DefFile string
 	}
 
+	type networkConnection struct {
+		NetworkName string
+		EnableNat   bool
+	}
+
+	type device struct {
+		DeviceType string
+		Connection interface{}
+	}
+
 	type containerInit struct {
 		SystemType  string
 		Name        string
 		IsDummy     bool
 		VolumePath  string
 		Definitions []defConfig
+		Devices     []device
 	}
 
 	cu := &containerInit{
@@ -160,6 +171,18 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	// Dummy mode will balk if the definitions are configured
 	if !c.Dummy {
 		cu.Definitions = []defConfig{defConfig{fmt.Sprintf(`%s\container.def`, c.Rootfs)}}
+	}
+
+	if c.Network.Interface != nil {
+		log.Debugf("Bridge Name: %s\n", c.Network.Interface.Bridge)
+		cu.Devices = append(cu.Devices,
+			device{
+				DeviceType: "Network",
+				Connection: &networkConnection{
+					NetworkName: c.Network.Interface.Bridge,
+					EnableNat:   false,
+				},
+			})
 	}
 
 	configurationb, err := json.Marshal(cu)

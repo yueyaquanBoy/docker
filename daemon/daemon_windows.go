@@ -175,6 +175,8 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 	if !config.DisableNetwork {
 		job := eng.Job("init_networkdriver")
 
+		job.Setenv("BridgeIface", config.BridgeIface)
+
 		if err := job.Run(); err != nil {
 			return nil, err
 		}

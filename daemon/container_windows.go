@@ -2,11 +2,39 @@ package daemon
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/daemon/execdriver"
+	"github.com/docker/docker/engine"
 	"github.com/docker/docker/pkg/archive"
 )
+
+func (container *Container) AllocateNetwork() error {
+	mode := container.hostConfig.NetworkMode
+	if container.Config.NetworkDisabled || !mode.IsPrivate() {
+		return nil
+	}
+
+	var (
+		env *engine.Env
+		err error
+		eng = container.daemon.eng
+	)
+
+	job := eng.Job("allocate_interface", container.ID)
+	job.Setenv("RequestedMac", container.Config.MacAddress)
+	if env, err = job.Stdout.AddEnv(); err != nil {
+		return err
+	}
+	if err = job.Run(); err != nil {
+		return err
+	}
+
+	container.NetworkSettings.Bridge = env.Get("Bridge")
+
+	return nil
+}
 
 func (container *Container) Kill() error {
 	if !container.IsRunning() {
@@ -52,6 +80,10 @@ func (container *Container) Start() (err error) {
 		return err
 	}
 
+	if err := container.initializeNetworking(); err != nil {
+		return err
+	}
+
 	// This is where is Linux it calls into the Exec Driver. TODO WINDOWS (see populateCommand())
 	if err := populateCommand(container, nil); err != nil {
 		return err
@@ -63,6 +95,17 @@ func (container *Container) Start() (err error) {
 // TODO WINDOWS
 // This can be totally factored out but currently also used in create.go
 func (container *Container) prepareVolumes() error {
+	return nil
+}
+
+func (container *Container) initializeNetworking() error {
+	if container.daemon.config.DisableNetwork {
+		container.Config.NetworkDisabled = true
+		return nil
+	}
+	if err := container.AllocateNetwork(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -80,6 +123,26 @@ func (container *Container) ExportRw() (archive.Archive, error) {
 }
 
 func populateCommand(c *Container, env []string) error {
+	en := &execdriver.Network{
+		Mtu:       c.daemon.config.Mtu,
+		Interface: nil,
+	}
+
+	parts := strings.SplitN(string(c.hostConfig.NetworkMode), ":", 2)
+	switch parts[0] {
+	case "none":
+	case "bridge", "": // empty string to support existing containers
+		if !c.Config.NetworkDisabled {
+			network := c.NetworkSettings
+			en.Interface = &execdriver.NetworkInterface{
+				Bridge: network.Bridge,
+			}
+		}
+	case "host", "container":
+		return fmt.Errorf("unsupported network mode: %s", c.hostConfig.NetworkMode)
+	default:
+		return fmt.Errorf("invalid network mode: %s", c.hostConfig.NetworkMode)
+	}
 
 	pid := &execdriver.Pid{}
 	pid.HostPid = c.hostConfig.PidMode.IsHost()
@@ -107,7 +170,7 @@ func populateCommand(c *Container, env []string) error {
 		ReadonlyRootfs: c.hostConfig.ReadonlyRootfs,
 		InitPath:       "/.dockerinit",
 		WorkingDir:     c.Config.WorkingDir,
-		//		Network:            en,
+		Network:        en,
 		//		Ipc:                ipc,
 		Pid:       pid,
 		Resources: resources,
