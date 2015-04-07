@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/common"
 	"github.com/docker/docker/pkg/progressreader"
+	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/pkg/truncindex"
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/docker/utils"
@@ -37,7 +38,7 @@ func NewGraph(root string, driver graphdriver.Driver) (*Graph, error) {
 		return nil, err
 	}
 	// Create the root directory if it doesn't exists
-	if err := os.MkdirAll(root, 0700); err != nil && !os.IsExist(err) {
+	if err := system.MkdirAll(root, 0700); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
 
@@ -171,7 +172,7 @@ func (graph *Graph) TempLayerArchive(id string, sf *utils.StreamFormatter, outpu
 // Mktemp creates a temporary sub-directory inside the graph's filesystem.
 func (graph *Graph) Mktemp(id string) (string, error) {
 	dir := filepath.Join(graph.Root, "_tmp", common.GenerateRandomID())
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := system.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}
 	return dir, nil

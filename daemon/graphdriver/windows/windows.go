@@ -73,7 +73,7 @@ func (d *DiffDiskDriver) Create(id, parent string) error {
 
 	dir := d.dir(id)
 	log.Debugln("dir=", dir)
-	if err := os.MkdirAll(filepath.Dir(dir), 0700); err != nil {
+	if err := system.MkdirAll(filepath.Dir(dir), 0700); err != nil {
 		return err
 	}
 	if err := os.Mkdir(dir, 0755); err != nil {
@@ -292,6 +292,23 @@ func (d *DiffDiskDriver) DiffSize(id, parent string) (size int64, err error) {
 }
 
 func (d *DiffDiskDriver) CopyDiff(sourceId, id string) error {
+	d.Lock()
+	defer d.Unlock()
+
+	if d.active[sourceId] != 0 {
+		log.Warnf("Committing active id %s", id)
+		err := DismountVhd(d.dir(sourceId))
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_, err := MountVhd(d.dir(sourceId))
+			if err != nil {
+				log.Warnf("Failed to remount VHD: %s", err)
+			}
+		}()
+	}
+
 	if err := os.Mkdir(d.dir(id), 0755); err != nil {
 		return err
 	}
@@ -363,16 +380,8 @@ func GetMountedVolumePath(path string) (string, error) {
 }
 
 func CopyVhd(src, dst string) error {
-	// This script will overwrite the destination VHD with a copy of the source.
-	// NOTE: the indentation must be spaces and not tabs, otherwise the
-	// powershell invocation will fail.
-	script := `
-    $src = "` + src + `.vhdx"
-    $dst = "` + dst + `.vhdx"
-    cp $src $dst
-    `
+	srcPath := src + ".vhdx"
+	dstPath := dst + ".vhdx"
 
-	log.Debugln("Attempting to overwrite VHD '", src, ".vhdx' with '", dst, ".vhdx'")
-	_, err := pshell.ExecutePowerShell(script)
-	return err
+	return chrootarchive.CopyFileWithTar(srcPath, dstPath)
 }

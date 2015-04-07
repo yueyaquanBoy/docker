@@ -48,7 +48,7 @@ func NewDriver(root, initPath string) (*driver, error) {
 		return nil, err
 	}
 
-	if err := os.MkdirAll(root, 0700); err != nil {
+	if err := system.MkdirAll(root, 0700); err != nil {
 		return nil, err
 	}
 	// native driver root is at docker_root/execdriver/native. Put apparmor at docker_root
@@ -306,7 +306,7 @@ func (d *driver) cleanContainer(id string) error {
 }
 
 func (d *driver) createContainerRoot(id string) error {
-	return os.MkdirAll(filepath.Join(d.root, id), 0655)
+	return system.MkdirAll(filepath.Join(d.root, id), 0655)
 }
 
 func (d *driver) Clean(id string) error {

@@ -424,7 +424,7 @@ loop:
 			parent := filepath.Dir(hdr.Name)
 			parentPath := filepath.Join(dest, parent)
 			if _, err := os.Lstat(parentPath); err != nil && os.IsNotExist(err) {
-				err = os.MkdirAll(parentPath, 0777)
+				err = system.MkdirAll(parentPath, 0777)
 				if err != nil {
 					return err
 				}
@@ -544,7 +544,7 @@ func (archiver *Archiver) CopyWithTar(src, dst string) error {
 	}
 	// Create dst, copy src's content into it
 	log.Debugf("Creating dest directory: %s", dst)
-	if err := os.MkdirAll(dst, 0755); err != nil && !os.IsExist(err) {
+	if err := system.MkdirAll(dst, 0755); err != nil && !os.IsExist(err) {
 		return err
 	}
 	log.Debugf("Calling TarUntar(%s, %s)", src, dst)
@@ -573,7 +573,7 @@ func (archiver *Archiver) CopyFileWithTar(src, dst string) (err error) {
 		dst = filepath.Join(dst, filepath.Base(src))
 	}
 	// Create the holding directory if necessary
-	if err := os.MkdirAll(filepath.Dir(dst), 0700); err != nil && !os.IsExist(err) {
+	if err := system.MkdirAll(filepath.Dir(dst), 0700); err != nil && !os.IsExist(err) {
 		return err
 	}
 

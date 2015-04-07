@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/engine"
+	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/runconfig"
 )
 
@@ -64,7 +65,7 @@ func (daemon *Daemon) setHostConfig(container *Container, hostConfig *runconfig.
 		// ensure the source exists on the host
 		_, err := os.Stat(source)
 		if err != nil && os.IsNotExist(err) {
-			err = os.MkdirAll(source, 0755)
+			err = system.MkdirAll(source, 0755)
 			if err != nil {
 				return fmt.Errorf("Could not create local directory '%s' for bind mount: %s!", source, err.Error())
 			}

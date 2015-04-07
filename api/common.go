@@ -3,13 +3,13 @@ package api
 import (
 	"fmt"
 	"mime"
-	"os"
 	"path/filepath"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/pkg/parsers"
+	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/pkg/version"
 	"github.com/docker/libtrust"
 )
@@ -113,7 +113,7 @@ func MatchesContentType(contentType, expectedType string) bool {
 // LoadOrCreateTrustKey attempts to load the libtrust key at the given path,
 // otherwise generates a new one
 func LoadOrCreateTrustKey(trustKeyPath string) (libtrust.PrivateKey, error) {
-	err := os.MkdirAll(filepath.Dir(trustKeyPath), 0700)
+	err := system.MkdirAll(filepath.Dir(trustKeyPath), 0700)
 	if err != nil {
 		return nil, err
 	}

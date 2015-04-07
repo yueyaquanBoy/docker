@@ -23,6 +23,7 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/graphdb"
 	"github.com/docker/docker/pkg/sysinfo"
+	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/pkg/truncindex"
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/docker/trust"
@@ -115,7 +116,7 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 	}
 	config.Root = realRoot
 	// Create the root directory if it doesn't exists
-	if err := os.MkdirAll(config.Root, 0700); err != nil && !os.IsExist(err) {
+	if err := system.MkdirAll(config.Root, 0700); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
 
@@ -131,7 +132,7 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 
 	daemonRepo := filepath.Join(config.Root, "containers")
 
-	if err := os.MkdirAll(daemonRepo, 0700); err != nil && !os.IsExist(err) {
+	if err := system.MkdirAll(daemonRepo, 0700); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
 
@@ -163,7 +164,7 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 	}
 
 	trustDir := filepath.Join(config.Root, "trust")
-	if err := os.MkdirAll(trustDir, 0700); err != nil && !os.IsExist(err) {
+	if err := system.MkdirAll(trustDir, 0700); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
 	t, err := trust.NewTrustStore(trustDir)

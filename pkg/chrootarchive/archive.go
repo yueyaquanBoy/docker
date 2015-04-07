@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/reexec"
+	"github.com/docker/docker/pkg/system"
 )
 
 var chrootArchiver = &archive.Archiver{Untar: Untar}
@@ -62,7 +63,7 @@ func Untar(tarArchive io.Reader, dest string, options *archive.TarOptions) error
 
 	dest = filepath.Clean(dest)
 	if _, err := os.Stat(dest); os.IsNotExist(err) {
-		if err := os.MkdirAll(dest, 0777); err != nil {
+		if err := system.MkdirAll(dest, 0777); err != nil {
 			return err
 		}
 	}
