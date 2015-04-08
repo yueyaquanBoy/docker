@@ -5,7 +5,6 @@ import (
 	"bytes"
 
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"expvar"
 	"fmt"
@@ -13,7 +12,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/http/pprof"
 	"os"
 	"strconv"
@@ -1249,8 +1247,6 @@ func makeHttpHandler(eng *engine.Engine, logging bool, localMethod string, local
 
 		if logging {
 			log.Infof("%s %s", r.Method, r.RequestURI)
-			bytes, _ := httputil.DumpRequest(r, true)
-			log.Infof("%s", hex.Dump(bytes))
 		}
 
 		if strings.Contains(r.Header.Get("User-Agent"), "Docker-Client/") {
