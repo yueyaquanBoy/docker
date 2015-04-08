@@ -32,6 +32,7 @@ func (container *Container) AllocateNetwork() error {
 	}
 
 	container.NetworkSettings.Bridge = env.Get("Bridge")
+	container.NetworkSettings.MacAddress = env.Get("MacAddress")
 
 	return nil
 }
@@ -135,7 +136,8 @@ func populateCommand(c *Container, env []string) error {
 		if !c.Config.NetworkDisabled {
 			network := c.NetworkSettings
 			en.Interface = &execdriver.NetworkInterface{
-				Bridge: network.Bridge,
+				Bridge:     network.Bridge,
+				MacAddress: network.MacAddress,
 			}
 		}
 	case "host", "container":

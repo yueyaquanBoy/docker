@@ -41,6 +41,7 @@ func Allocate(job *engine.Job) engine.Status {
 
 	out := engine.Env{}
 	out.Set("Bridge", bridgeIface)
+	out.Set("MacAddress", job.Getenv("RequestedMac"))
 
 	out.WriteTo(job.Stdout)
 

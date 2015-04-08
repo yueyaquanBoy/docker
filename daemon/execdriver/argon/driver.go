@@ -146,10 +146,14 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		NetworkName string
 		EnableNat   bool
 	}
+	type networkSettings struct {
+		MacAddress string
+	}
 
 	type device struct {
 		DeviceType string
 		Connection interface{}
+		Settings   interface{}
 	}
 
 	type containerInit struct {
@@ -174,15 +178,21 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}
 
 	if c.Network.Interface != nil {
-		log.Debugf("Bridge Name: %s\n", c.Network.Interface.Bridge)
-		cu.Devices = append(cu.Devices,
-			device{
-				DeviceType: "Network",
-				Connection: &networkConnection{
-					NetworkName: c.Network.Interface.Bridge,
-					EnableNat:   false,
-				},
-			})
+		dev := device{
+			DeviceType: "Network",
+			Connection: &networkConnection{
+				NetworkName: c.Network.Interface.Bridge,
+				EnableNat:   false,
+			},
+		}
+
+		if c.Network.Interface.MacAddress != "" {
+			dev.Settings = networkSettings{
+				MacAddress: c.Network.Interface.MacAddress,
+			}
+		}
+
+		cu.Devices = append(cu.Devices, dev)
 	}
 
 	configurationb, err := json.Marshal(cu)
