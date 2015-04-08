@@ -189,7 +189,6 @@ func workdir(b *Builder, args []string, attributes map[string]bool, original str
 	}
 
 	workdir := args[0]
-	log.Debugln("workdir: ", workdir)
 
 	// We do different processing on Windows to what would be expected to solve
 	// an interesting problem. Generally on Windows, an absolute path would
@@ -198,7 +197,7 @@ func workdir(b *Builder, args []string, attributes map[string]bool, original str
 	// \windows\system32 with no drive letters. Hence we can't use filepath.
 	// IsAbs to determine "absoluteness". Note that we (hesitantly correctly)
 	// check for both forward and back slashes as this is what the Go implementation
-	// if IsAbs() does in the "isSlash()" function.
+	// of IsAbs() does in the "isSlash()" function.
 
 	isAbs := false
 	if runtime.GOOS == "windows" {
@@ -208,12 +207,10 @@ func workdir(b *Builder, args []string, attributes map[string]bool, original str
 	}
 
 	if !isAbs {
-		log.Debugln("workdir is not absolute")
 		workdir = filepath.Join(string(os.PathSeparator), b.Config.WorkingDir, workdir)
 	}
 
 	b.Config.WorkingDir = workdir
-	log.Debugln("workdir is ", workdir)
 
 	return b.commit("", b.Config.Cmd, fmt.Sprintf("WORKDIR %v", workdir))
 }
