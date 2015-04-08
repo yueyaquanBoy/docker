@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	//	"strings"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,7 +15,6 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
 	"github.com/docker/docker/pkg/hcsshim"
-	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/pshell"
 	"github.com/docker/docker/pkg/system"
 )
@@ -81,20 +80,14 @@ func (d *DiffDiskDriver) Create(id, parent string) error {
 	}
 	if parent == "" {
 		// This is a base layer, so create a new VHD.
-		if err := CreateBaseVhd(id, dir); err != nil {
-			return err
-		}
+		return CreateBaseVhd(id, dir)
 	} else {
 		// This is an intermediate layer, so create a diff-VHD from
 		// the parent.
 		parentDir := d.dir(parent)
 		log.Debugln("parentDir=", parentDir)
-		if err := CreateDiffVhd(id, dir, parentDir); err != nil {
-			return err
-		}
+		return CreateDiffVhd(id, dir, parentDir)
 	}
-
-	return nil
 }
 
 func (d *DiffDiskDriver) dir(id string) string {
@@ -184,50 +177,33 @@ func (d *DiffDiskDriver) Cleanup() error {
 // Diff produces an archive of the changes between the specified
 // layer and its parent layer which may be "".
 func (d *DiffDiskDriver) Diff(id, parent string) (arch archive.Archive, err error) {
-	layerFs, err := d.Get(id, "")
+	// Always include the diff disk for the given layer.
+	diffFiles := []string{id + ".vhdx"}
+	prevLayer := d.dir(parent)
+	curParent, err := GetParentVhdPath(d.dir(id))
 	if err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		if err != nil {
-			d.Put(id)
-		}
-	}()
-
-	if parent == "" {
-		archive, err := archive.Tar(layerFs, archive.Uncompressed)
+	for strings.EqualFold((prevLayer + ".vhdx"), curParent) {
+		log.Debugf("Parent %s does not match parent %s.", (prevLayer + ".vhdx"), curParent)
+		// Add that diff to the list of files.
+		_, diffFile := filepath.Split(curParent)
+		diffFiles = append(diffFiles, diffFile)
+		curParent, err = GetParentVhdPath(curParent)
 		if err != nil {
 			return nil, err
 		}
-		return ioutils.NewReadCloserWrapper(archive, func() error {
-			err := archive.Close()
-			d.Put(id)
-			return err
-		}), nil
 	}
 
-	parentFs, err := d.Get(parent, "")
+	opts := &archive.TarOptions{
+		IncludeFiles: diffFiles,
+	}
+
+	arch, err = archive.TarWithOptions(filepath.Join(d.home, "dir"), opts)
 	if err != nil {
 		return nil, err
 	}
-	defer d.Put(parent)
-
-	changes, err := archive.ChangesDirs(layerFs, parentFs)
-	if err != nil {
-		return nil, err
-	}
-
-	archive, err := archive.ExportChanges(layerFs, changes)
-	if err != nil {
-		return nil, err
-	}
-
-	return ioutils.NewReadCloserWrapper(archive, func() error {
-		err := archive.Close()
-		d.Put(id)
-		return err
-	}), nil
+	return arch, nil
 }
 
 // Changes produces a list of changes between the specified layer
@@ -256,16 +232,9 @@ func (d *DiffDiskDriver) Changes(id, parent string) ([]archive.Change, error) {
 // layer with the specified id and parent, returning the size of the
 // new layer in bytes.
 func (d *DiffDiskDriver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (size int64, err error) {
-	// Mount the root filesystem so we can apply the diff/layer.
-	_, err = d.Get(id, "")
-	if err != nil {
-		return
-	}
-	defer d.Put(id)
-
 	start := time.Now().UTC()
 	log.Debugf("Start untar layer")
-	if size, err = chrootarchive.ApplyLayer(d.dir(id), diff); err != nil {
+	if size, err = chrootarchive.ApplyLayer(filepath.Join(d.home, "dir"), diff); err != nil {
 		return
 	}
 	log.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())
@@ -352,6 +321,28 @@ func CreateBaseVhd(id string, folder string) error {
 	log.Debugln("Attempting to create base vhdx named '", id, "'at'", folder, "'")
 	_, err := pshell.ExecutePowerShell(script)
 	return err
+}
+
+func GetParentVhdPath(id string) (string, error) {
+	// This script will check a VHD for a parent VHD path.
+	// NOTE: the indentation must be spaces and not tabs, otherwise
+	// the powershell invocation will fail.
+	script := `
+    $vhdPath = "` + id + `"
+    if (!$vhdPath.EndsWith(".vhdx")){$vhdPath += ".vhdx"}
+    function throwifnull {
+        if ($args[0] -eq $null){
+            throw
+        }
+    }
+    $vhd = Get-VHD -Path $vhdPath
+    throwifnull $vhd
+    $vhd.ParentPath
+    `
+
+	log.Debugln("Attempting to get parent path of '", id, "'")
+	parentPath, err := pshell.ExecutePowerShell(script)
+	return parentPath, err
 }
 
 func CreateDiffVhd(id string, folder string, parent string) error {
