@@ -91,7 +91,7 @@ func (d *DiffDiskDriver) Create(id, parent string) error {
 }
 
 func (d *DiffDiskDriver) dir(id string) string {
-	return filepath.Join(d.home, "dir", filepath.Base(id))
+	return filepath.Join(d.home, filepath.Base(id))
 }
 
 // Unmount and remove the dir information
@@ -199,7 +199,7 @@ func (d *DiffDiskDriver) Diff(id, parent string) (arch archive.Archive, err erro
 		IncludeFiles: diffFiles,
 	}
 
-	arch, err = archive.TarWithOptions(filepath.Join(d.home, "dir"), opts)
+	arch, err = archive.TarWithOptions(d.home, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func (d *DiffDiskDriver) Changes(id, parent string) ([]archive.Change, error) {
 func (d *DiffDiskDriver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (size int64, err error) {
 	start := time.Now().UTC()
 	log.Debugf("Start untar layer")
-	if size, err = chrootarchive.ApplyLayer(filepath.Join(d.home, "dir"), diff); err != nil {
+	if size, err = chrootarchive.ApplyLayer(d.home, diff); err != nil {
 		return
 	}
 	log.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())

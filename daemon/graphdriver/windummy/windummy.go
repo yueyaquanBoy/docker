@@ -93,7 +93,7 @@ func (d *Driver) Create(id, parent string) error {
 }
 
 func (d *Driver) dir(id string) string {
-	return filepath.Join(d.home, "dir", filepath.Base(id))
+	return filepath.Join(d.home, filepath.Base(id))
 }
 
 // Unmount and remove the dir information
