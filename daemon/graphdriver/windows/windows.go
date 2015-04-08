@@ -199,7 +199,11 @@ func (d *DiffDiskDriver) Diff(id, parent string) (arch archive.Archive, err erro
 		IncludeFiles: diffFiles,
 	}
 
+<<<<<<< HEAD
 	arch, err = archive.TarWithOptions(d.home, opts)
+=======
+	arch, err = archive.TarWithOptions(filepath.Join(d.home, "dir"), opts)
+>>>>>>> Implement Save/Load for images.
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +238,11 @@ func (d *DiffDiskDriver) Changes(id, parent string) ([]archive.Change, error) {
 func (d *DiffDiskDriver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (size int64, err error) {
 	start := time.Now().UTC()
 	log.Debugf("Start untar layer")
+<<<<<<< HEAD
 	if size, err = chrootarchive.ApplyLayer(d.home, diff); err != nil {
+=======
+	if size, err = chrootarchive.ApplyLayer(filepath.Join(d.home, "dir"), diff); err != nil {
+>>>>>>> Implement Save/Load for images.
 		return
 	}
 	log.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())
