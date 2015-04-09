@@ -301,7 +301,9 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	// Start the command running in the container.
 	var pid uint32
 	pid, err = hcsshim.CreateProcessInComputeSystem(c.ID,
+		"", // This will be applicationname
 		commandLine,
+		c.WorkingDir,
 		stdDevices,
 		emulateTTY)
 	if err != nil {
@@ -528,7 +530,9 @@ func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessCo
 	// Start the command running in the container.
 	var pid uint32
 	pid, err = hcsshim.CreateProcessInComputeSystem(c.ID,
+		"", // This will be applicationname
 		commandLine,
+		c.WorkingDir,
 		stdDevices,
 		emulateTTY)
 	if err != nil {

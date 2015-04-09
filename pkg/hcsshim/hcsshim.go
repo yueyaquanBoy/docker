@@ -100,7 +100,12 @@ func StartComputeSystem(ID string) error {
 	return nil
 } // StartComputeSystem
 
-func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devices, EmulateTTY uint32) (PID uint32, err error) {
+func CreateProcessInComputeSystem(ID string,
+	ApplicationName string,
+	CommandLine string,
+	WorkingDir string,
+	StdDevices Devices,
+	EmulateTTY uint32) (PID uint32, err error) {
 
 	log.Debugln("hcsshim::CreateProcessInComputeSystem")
 	log.Debugln("ID:", ID)
@@ -113,10 +118,24 @@ func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devi
 		return 0, err
 	}
 
+	// Convert ApplicationName to uint16 pointer for calling the procedure
+	ApplicationNamep, err := syscall.UTF16PtrFromString(ApplicationName)
+	if err != nil {
+		log.Debugln("Failed conversion of ApplicationName to pointer ", err)
+		return 0, err
+	}
+
 	// Convert CommandLine to uint16 pointer for calling the procedure
 	CommandLinep, err := syscall.UTF16PtrFromString(CommandLine)
 	if err != nil {
 		log.Debugln("Failed conversion of CommandLine to pointer ", err)
+		return 0, err
+	}
+
+	// Convert WorkingDir to uint16 pointer for calling the procedure
+	WorkingDirp, err := syscall.UTF16PtrFromString(WorkingDir)
+	if err != nil {
+		log.Debugln("Failed conversion of WorkingDir to pointer ", err)
 		return 0, err
 	}
 
@@ -153,13 +172,20 @@ func CreateProcessInComputeSystem(ID string, CommandLine string, StdDevices Devi
 	// To get a POINTER to the PID
 	pid := new(uint32)
 
+	log.Debugln("Calling the procedure itself")
+
 	// Call the procedure itself.
 	r1, _, _ := procCreateProcessInComputeSystem.Call(
 		uintptr(unsafe.Pointer(IDp)),
+		uintptr(unsafe.Pointer(ApplicationNamep)),
 		uintptr(unsafe.Pointer(CommandLinep)),
+		uintptr(unsafe.Pointer(WorkingDirp)),
+		uintptr(0), // Environment to follow later
 		uintptr(unsafe.Pointer(internalDevices)),
 		uintptr(EmulateTTY),
 		uintptr(unsafe.Pointer(pid)))
+
+	log.Debugln("Returned from procedure call")
 
 	if r1 != 0 {
 		return 0, syscall.Errno(r1)
