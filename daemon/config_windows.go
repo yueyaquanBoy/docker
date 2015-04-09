@@ -43,8 +43,8 @@ type Config struct {
 // from the command-line.
 func (config *Config) InstallFlags() {
 
-	flag.StringVar(&config.Pidfile, []string{"p", "-pidfile"}, os.Getenv("appdata")+string(os.PathSeparator)+"docker.pid", "Path to use for daemon PID file")
-	flag.StringVar(&config.Root, []string{"g", "-graph"}, os.Getenv("appdata")+string(os.PathSeparator)+"docker", "Path to the root of the Docker runtime")
+	flag.StringVar(&config.Pidfile, []string{"p", "-pidfile"}, os.Getenv("programdata")+string(os.PathSeparator)+"docker.pid", "Path to use for daemon PID file")
+	flag.StringVar(&config.Root, []string{"g", "-graph"}, os.Getenv("programdata")+string(os.PathSeparator)+"docker", "Path to the root of the Docker runtime")
 	flag.StringVar(&config.ExecDriver, []string{"e", "-exec-driver"}, "argon", "Exec driver to use")
 	flag.StringVar(&config.BridgeIface, []string{"b", "-bridge"}, "", "Attach containers to a network bridge")
 	flag.BoolVar(&config.AutoRestart, []string{"#r", "#-restart"}, true, "--restart on the daemon has been deprecated in favor of --restart policies on docker run")
