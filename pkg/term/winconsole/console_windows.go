@@ -611,12 +611,9 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 	n = len(command)
 
 	parsedCommand := parseAnsiCommand(command)
-	logrus.Debugf("[windows] HandleOutputCommand: %v", parsedCommand)
-
 	if consoleLogging {
-		log.Debugf("ANSI: HandleOutputCommand len %d command %s", n, command)
+		log.Debugf("[windows] HandleOutputCommand: %v", parsedCommand)
 	}
-
 	// console settings changes need to happen in atomic way
 	term.outMutex.Lock()
 	defer term.outMutex.Unlock()
@@ -715,12 +712,10 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 			}
 		}
 
-		if consoleLogging {
-			log.Debugln("ANSI: Calling setConsoleCursorPosition to ", column-1, line-1)
-		}
-
 		// The numbers are not 0 based, but 1 based
-		logrus.Debugf("[windows] HandleOutputCommmand: Moving cursor to (%v,%v)", column-1, line-1)
+		if consoleLogging {
+			log.Debugf("[windows] HandleOutputCommmand: Moving cursor to (%v,%v)", column-1, line-1)
+		}
 		if err := setConsoleCursorPosition(handle, false, column-1, line-1); err != nil {
 			if consoleLogging {
 				log.Debugln("ANSI: Failure from setConsoleCursorPosition", err)
