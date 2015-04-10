@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"regexp"
 	"strings"
@@ -706,13 +707,17 @@ func (daemon *Daemon) Mount(container *Container) error {
 	if err != nil {
 		return fmt.Errorf("Error getting container %s from driver %s: %s", container.ID, daemon.driver, err)
 	}
-	if container.basefs == "" {
-		container.basefs = dir
-	} else if container.basefs != dir {
-		daemon.driver.Put(container.ID)
-		return fmt.Errorf("Error: driver %s is returning inconsistent paths for container %s ('%s' then '%s')",
-			daemon.driver, container.ID, container.basefs, dir)
+	if container.basefs != dir {
+		if container.basefs != "" && runtime.GOOS != "windows" {
+			daemon.driver.Put(container.ID)
+			return fmt.Errorf("Error: driver %s is returning inconsistent paths for container %s ('%s' then '%s')",
+				daemon.driver, container.ID, container.basefs, dir)
+		} else {
+			log.Warnf("Overwriting container basefs '%s' with newly returned path '%s'.",
+				container.basefs, dir)
+		}
 	}
+	container.basefs = dir
 	return nil
 }
 
