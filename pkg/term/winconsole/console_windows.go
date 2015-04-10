@@ -500,11 +500,7 @@ func setConsoleCursorPosition(handle uintptr, isRelative bool, column int16, lin
 
 // http://msdn.microsoft.com/en-us/library/windows/desktop/ms683207(v=vs.85).aspx
 func getNumberOfConsoleInputEvents(handle uintptr) (uint16, error) {
-<<<<<<< HEAD
-	var n DWORD // JJH FIX
-=======
 	var n DWORD
->>>>>>> 1a36a11... Windows console fixes
 	if err := getError(getNumberOfConsoleInputEventsProc.Call(handle, uintptr(unsafe.Pointer(&n)))); err != nil {
 		return 0, err
 	}
@@ -513,14 +509,10 @@ func getNumberOfConsoleInputEvents(handle uintptr) (uint16, error) {
 
 //http://msdn.microsoft.com/en-us/library/windows/desktop/ms684961(v=vs.85).aspx
 func readConsoleInputKey(handle uintptr, inputBuffer []INPUT_RECORD) (int, error) {
-<<<<<<< HEAD
-	var nr DWORD // JJH Fix. Was WORD
+	var nr DWORD
 	if consoleLogging {
 		log.Debugln("calling readConsoleInputProc")
 	}
-=======
-	var nr DWORD
->>>>>>> 1a36a11... Windows console fixes
 	if err := getError(readConsoleInputProc.Call(handle, uintptr(unsafe.Pointer(&inputBuffer[0])), uintptr(len(inputBuffer)), uintptr(unsafe.Pointer(&nr)))); err != nil {
 		return 0, err
 	}
@@ -619,6 +611,7 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 	n = len(command)
 
 	parsedCommand := parseAnsiCommand(command)
+	logrus.Debugf("[windows] HandleOutputCommand: %v", parsedCommand)
 
 	if consoleLogging {
 		log.Debugf("ANSI: HandleOutputCommand len %d command %s", n, command)
@@ -725,8 +718,9 @@ func (term *WindowsTerminal) HandleOutputCommand(handle uintptr, command []byte)
 		if consoleLogging {
 			log.Debugln("ANSI: Calling setConsoleCursorPosition to ", column-1, line-1)
 		}
-		
+
 		// The numbers are not 0 based, but 1 based
+		logrus.Debugf("[windows] HandleOutputCommmand: Moving cursor to (%v,%v)", column-1, line-1)
 		if err := setConsoleCursorPosition(handle, false, column-1, line-1); err != nil {
 			if consoleLogging {
 				log.Debugln("ANSI: Failure from setConsoleCursorPosition", err)
@@ -1206,8 +1200,7 @@ func (term *WindowsTerminal) HandleInputSequence(fd uintptr, command []byte) (n 
 }
 
 func marshal(c COORD) uintptr {
-	// works only on intel-endian machines
-	return uintptr(uint32(uint32(uint16(c.Y))<<16 | uint32(uint16(c.X))))
+	return uintptr(*((*DWORD)(unsafe.Pointer(&c))))
 }
 
 // IsConsole returns true if the given file descriptor is a terminal.
