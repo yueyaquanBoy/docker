@@ -140,11 +140,15 @@ func CreateProcessInComputeSystem(ID string,
 	}
 
 	// Need an instance of the redirection devices for internal use when calling the procedure
-	internalDevices := new(deviceInt)
+	var (
+		stdinpipe  *uint16
+		stdoutpipe *uint16
+		stderrpipe *uint16
+	)
 
 	// Convert stdin, if supplied to uint16 pointer for calling the procedure
 	if len(StdDevices.StdInPipe) != 0 {
-		internalDevices.stdinpipe, err = syscall.UTF16PtrFromString(StdDevices.StdInPipe)
+		stdinpipe, err = syscall.UTF16PtrFromString(StdDevices.StdInPipe)
 		if err != nil {
 			log.Debugln("Failed conversion of StdInPipe to pointer ", err)
 			return 0, err
@@ -153,7 +157,7 @@ func CreateProcessInComputeSystem(ID string,
 
 	// Convert stdout, if supplied to uint16 pointer for calling the procedure
 	if len(StdDevices.StdOutPipe) != 0 {
-		internalDevices.stdoutpipe, err = syscall.UTF16PtrFromString(StdDevices.StdOutPipe)
+		stdoutpipe, err = syscall.UTF16PtrFromString(StdDevices.StdOutPipe)
 		if err != nil {
 			log.Debugln("Failed conversion of StdOutPipe to pointer ", err)
 			return 0, err
@@ -162,11 +166,17 @@ func CreateProcessInComputeSystem(ID string,
 
 	// Convert stderr, if supplied to uint16 pointer for calling the procedure
 	if len(StdDevices.StdErrPipe) != 0 {
-		internalDevices.stderrpipe, err = syscall.UTF16PtrFromString(StdDevices.StdErrPipe)
+		stderrpipe, err = syscall.UTF16PtrFromString(StdDevices.StdErrPipe)
 		if err != nil {
 			log.Debugln("Failed conversion of StdErrPipe to pointer ", err)
 			return 0, err
 		}
+	}
+
+	internalDevices := &deviceInt{
+		stdinpipe:  stdinpipe,
+		stdoutpipe: stdoutpipe,
+		stderrpipe: stderrpipe,
 	}
 
 	// To get a POINTER to the PID
@@ -282,27 +292,28 @@ func ShutdownComputeSystem(ID string) error {
 func ResizeTTY(ID string, h, w int) error {
 	log.Debugf("hcsshim::ResizeTTY %s (%d,%d) - NOT IMPLEMENTED", ID, h, w)
 	return nil
+	/*
+		// Make sure ResizeTTY is supported
+		err := procResizeTTY.Find()
+		if err != nil {
+			return err
+		}
 
-	// Make sure ResizeTTY is supported
-	err := procResizeTTY.Find()
-	if err != nil {
-		return err
-	}
+		// Convert ID to uint16 pointers for calling the procedure
+		IDp, err := syscall.UTF16PtrFromString(ID)
+		if err != nil {
+			log.Debugln("Failed conversion of ID to pointer ", err)
+			return err
+		}
 
-	// Convert ID to uint16 pointers for calling the procedure
-	IDp, err := syscall.UTF16PtrFromString(ID)
-	if err != nil {
-		log.Debugln("Failed conversion of ID to pointer ", err)
-		return err
-	}
+		h32 := uint32(h)
+		w32 := uint32(w)
 
-	h32 := uint32(h)
-	w32 := uint32(w)
+		r1, _, _ := procResizeTTY.Call(uintptr(unsafe.Pointer(IDp)), uintptr(h32), uintptr(w32))
+		if r1 != 0 {
+			return syscall.Errno(r1)
+		}
 
-	r1, _, _ := procResizeTTY.Call(uintptr(unsafe.Pointer(IDp)), uintptr(h32), uintptr(w32))
-	if r1 != 0 {
-		return syscall.Errno(r1)
-	}
-
-	return nil
+		return nil
+	*/
 }
