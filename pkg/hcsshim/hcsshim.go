@@ -222,8 +222,6 @@ func CreateProcessInComputeSystem(ID string,
 
 	log.Debugln("Returned from procedure call")
 
-	log.Debugln("Returned from procedure call")
-
 	if r1 != 0 {
 		return 0, syscall.Errno(r1)
 	}
