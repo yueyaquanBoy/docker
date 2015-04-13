@@ -194,6 +194,7 @@ func CreateProcessInComputeSystem(ID string,
 		uintptr(unsafe.Pointer(internalDevices)),
 		uintptr(EmulateTTY),
 		uintptr(unsafe.Pointer(pid)))
+	use(unsafe.Pointer(internalDevices))
 
 	log.Debugln("Returned from procedure call")
 
@@ -317,3 +318,8 @@ func ResizeTTY(ID string, h, w int) error {
 		return nil
 	*/
 }
+
+// use is a no-op, but the compiler cannot see that it is.
+// Calling use(p) ensures that p is kept live until that point.
+//go:noescape
+func use(p unsafe.Pointer) {}
