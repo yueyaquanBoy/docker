@@ -80,7 +80,16 @@ func Allocate(job *engine.Job) engine.Status {
 
 	out := engine.Env{}
 	out.Set("Bridge", bridgeIface)
-	out.Set("MacAddress", job.Getenv("RequestedMac"))
+
+	// If no explicit mac address was given, generate a random one.
+	if mac, err = net.ParseMAC(job.Getenv("RequestedMac")); err != nil {
+		if mac, err = RequestMAC(); err != nil {
+			return job.Error(err)
+		}
+	}
+
+	out.Set("MacAddress", mac.String())
+	log.Debugln("NetworkDriver-Windows MAC=", mac.String())
 
 	// If no explicit mac address was given, generate a random one.
 	if mac, err = net.ParseMAC(job.Getenv("RequestedMac")); err != nil {
