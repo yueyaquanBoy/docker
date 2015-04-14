@@ -115,7 +115,6 @@ func SetupMACRange(ouiPrefix []byte) (err error) {
 	case 2:
 		macBase = append(ouiPrefix, o1, o2)
 		endMACRange = (1 << 16) - 1
-		endMACRange = 10
 	case 3:
 		macBase = append(ouiPrefix, o2)
 		endMACRange = (1 << 16) - 1
