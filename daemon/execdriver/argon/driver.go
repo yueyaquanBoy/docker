@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
@@ -187,8 +188,10 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		}
 
 		if c.Network.Interface.MacAddress != "" {
+			windowsStyleMAC := strings.Replace(
+				c.Network.Interface.MacAddress, ":", "-", -1)
 			dev.Settings = networkSettings{
-				MacAddress: c.Network.Interface.MacAddress,
+				MacAddress: windowsStyleMAC,
 			}
 		}
 
