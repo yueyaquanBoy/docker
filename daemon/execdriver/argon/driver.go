@@ -218,6 +218,16 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		log.Debugln("Failed to start ", err)
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
+	defer func() {
+		// Stop the container
+		log.Debugln("Shutting down container ", c.ID)
+		if err := hcsshim.ShutdownComputeSystem(c.ID); err != nil {
+			// IMPORTANT: Don't fail if fails to change state. It could already
+			// have been stopped through kill().
+			// Otherwise, the docker daemon will hang in job wait()
+			log.Debugln("Ignoring error from ShutdownComputeSystem ", err)
+		}
+	}()
 
 	// We use a different pipe name between real and dummy mode in the HCS
 	var pipePrefix string
@@ -340,17 +350,6 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 
 	// TODO - What do we do with this exit code????
 	log.Debugln("exitcode err", exitCode, err)
-
-	// Stop the container
-	log.Debugln("Shutting down container ", c.ID)
-	err = hcsshim.ShutdownComputeSystem(c.ID)
-	if err != nil {
-		// IMPORTANT: Don't fail if fails to change state. It could already
-		// have been stopped through kill().
-		// Otherwise, the docker daemon will hang in job wait()
-		log.Debugln("Ignoring error from ShutdownComputeSystem ", err)
-		err = nil
-	}
 
 	log.Debugln("Exiting Run() with ExitCode 0", c.ID)
 	return execdriver.ExitStatus{ExitCode: 0}, nil

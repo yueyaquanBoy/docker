@@ -36,10 +36,16 @@ func CreateDiffVhd(newVhdPath, parentVhdPath string) error {
 		return err
 	}
 
+	newVhdPathup := unsafe.Pointer(newVhdPathp)
+	parentVhdPathup := unsafe.Pointer(parentVhdPathp)
+
 	// Call the procedure itself.
 	r1, _, _ := procCreateDiffVhd.Call(
-		uintptr(unsafe.Pointer(newVhdPathp)),
-		uintptr(unsafe.Pointer(parentVhdPathp)))
+		uintptr(newVhdPathup),
+		uintptr(parentVhdPathup))
+
+	use(newVhdPathup)
+	use(parentVhdPathup)
 
 	if r1 != 0 {
 		return syscall.Errno(r1)
@@ -60,10 +66,17 @@ func MountVhd(vhdPath string) (string, error) {
 
 	var volumePathp [256]uint16
 	volumePathp[0] = 0
+
+	vhdPathup := unsafe.Pointer(vhdPathp)
+	volumePathup := unsafe.Pointer(&volumePathp)
+
 	// Call the procedure itself.
 	r1, _, _ := procMountVhd.Call(
-		uintptr(unsafe.Pointer(vhdPathp)),
-		uintptr(unsafe.Pointer(&volumePathp)))
+		uintptr(vhdPathup),
+		uintptr(volumePathup))
+
+	use(vhdPathup)
+	use(volumePathup)
 
 	if r1 != 0 {
 		return "", syscall.Errno(r1)
@@ -82,8 +95,12 @@ func DismountVhd(vhdPath string) error {
 		return err
 	}
 
+	vhdPathup := unsafe.Pointer(vhdPathp)
+
 	r1, _, _ := procDismountVhd.Call(
-		uintptr(unsafe.Pointer(vhdPathp)))
+		uintptr(vhdPathup))
+
+	use(vhdPathup)
 
 	if r1 != 0 {
 		return syscall.Errno(r1)
@@ -104,9 +121,16 @@ func GetVhdVolumePath(vhdPath string) (string, error) {
 
 	var volumePathp [256]uint16
 	volumePathp[0] = 0
+
+	vhdPathup := unsafe.Pointer(vhdPathp)
+	volumePathup := unsafe.Pointer(&volumePathp)
+
 	r1, _, _ := procGetVhdVolumePath.Call(
-		uintptr(unsafe.Pointer(vhdPathp)),
-		uintptr(unsafe.Pointer(&volumePathp)))
+		uintptr(vhdPathup),
+		uintptr(volumePathup))
+
+	use(vhdPathup)
+	use(volumePathup)
 
 	if r1 != 0 {
 		return "", syscall.Errno(r1)
