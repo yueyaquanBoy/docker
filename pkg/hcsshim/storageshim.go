@@ -6,7 +6,6 @@
 package hcsshim
 
 import (
-	"errors"
 	"syscall"
 	"unsafe"
 
@@ -14,11 +13,11 @@ import (
 	"github.com/docker/docker/pkg/guid"
 )
 
-const (
-	PROCATTACHFILTER = "AttachStorageFilter"
-	PROCDETACHFILTER = "DetachStorageFilter"
-	PROCINITSANDBOX  = "InitializeStorageSandbox"
-	PROCREMOVEFILE   = "RemoveFileOrReparsePoint"
+var (
+	procAttachFilter  = modvmcompute.NewProc("AttachStorageFilter")
+	procDetatchFilter = modvmcompute.NewProc("DetachStorageFilter")
+	procInitSandbox   = modvmcompute.NewProc("InitializeStorageSandbox")
+	procRemoveFile    = modvmcompute.NewProc("RemoveFileOrReparsePoint")
 )
 
 /* To pass into syscall, we need a struct matching the following:
@@ -69,13 +68,6 @@ func InitializeStorageSandbox(sandboxPath string, parentLayerPaths []string) err
 		// Array of descriptors that gets constructed.
 		layers []WC_LAYER_DESCRIPTOR
 
-		// Result values from calling the procedure
-		r1, r2 uintptr
-
-		// The DLL and procedure in the DLL respectively
-		dll  *syscall.DLL
-		proc *syscall.Proc
-
 		// Error tracking
 		err error
 	)
@@ -106,34 +98,21 @@ func InitializeStorageSandbox(sandboxPath string, parentLayerPaths []string) err
 
 	layerDescriptorsp = &(layers[0])
 
-	// Load the DLL and get the function
-	dll, proc, err = loadAndFind(PROCINITSANDBOX)
-
-	// Release once used if we managed to get a handle to it
-	if dll != nil {
-		defer dll.Release()
-	}
-
-	// Check for error from loadAndFind
-	if err != nil {
-		return err
-	}
+	sandboxPathup := unsafe.Pointer(sandboxPathp)
+	layerDescriptorsup := unsafe.Pointer(layerDescriptorsp)
 
 	// Call the procedure itself.
-	r1, r2, err = proc.Call(
-		uintptr(unsafe.Pointer(sandboxPathp)),
-		uintptr(unsafe.Pointer(layerDescriptorsp)),
+	r1, _, _ := procInitSandbox.Call(
+		uintptr(sandboxPathup),
+		uintptr(layerDescriptorsup),
 		uintptr(len(layers)))
+	use(unsafe.Pointer(sandboxPathp))
+	use(sandboxPathup)
+	use(unsafe.Pointer(layerDescriptorsp))
+	use(layerDescriptorsup)
 
-	// Check the result codes first
-	if r1 != 0 || r2 != 0 {
-		log.Debugln("r1 ", r1)
-		// Check for error itself next
-		if err != nil && err.Error() != "The operation completed successfully." {
-			return errors.New(PROCINITSANDBOX + " failed. " + err.Error())
-		} else {
-			return errors.New(PROCINITSANDBOX + " failed r1/r2 check")
-		}
+	if r1 != 0 {
+		return syscall.Errno(r1)
 	}
 
 	return nil
@@ -147,13 +126,6 @@ func RemoveFileOrReparsePoint(filePath string) error {
 		// Arguments to the call.
 		filePathp *uint16
 
-		// Result values from calling the procedure
-		r1, r2 uintptr
-
-		// The DLL and procedure in the DLL respectively
-		dll  *syscall.DLL
-		proc *syscall.Proc
-
 		// Error tracking
 		err error
 	)
@@ -164,32 +136,15 @@ func RemoveFileOrReparsePoint(filePath string) error {
 		return err
 	}
 
-	// Load the DLL and get the function
-	dll, proc, err = loadAndFind(PROCREMOVEFILE)
-
-	// Release once used if we managed to get a handle to it
-	if dll != nil {
-		defer dll.Release()
-	}
-
-	// Check for error from loadAndFind
-	if err != nil {
-		return err
-	}
+	filePathup := unsafe.Pointer(filePathp)
 
 	// Call the procedure itself.
-	r1, r2, err = proc.Call(uintptr(unsafe.Pointer(filePathp)))
+	r1, _, _ := procRemoveFile.Call(uintptr(filePathup))
+	use(unsafe.Pointer(filePathp))
+	use(filePathup)
 
-	// Check the result codes first
-	if r1 != 0 || r2 != 0 {
-		log.Debugln("r1", r1)
-		log.Debugln("r2", r2)
-		// Check for error itself next
-		if err != nil && err.Error() != "The operation completed successfully." {
-			return errors.New(PROCREMOVEFILE + " failed. " + err.Error())
-		} else {
-			return errors.New(PROCREMOVEFILE + " failed r1/r2 check")
-		}
+	if r1 != 0 {
+		return syscall.Errno(r1)
 	}
 
 	return nil
