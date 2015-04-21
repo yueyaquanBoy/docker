@@ -59,8 +59,7 @@ func (graph *Graph) Register(img *image.Image, layerData archive.ArchiveReader) 
 		return fmt.Errorf("Mktemp failed: %s", err)
 	}
 
-	if wd, ok := graph.driver.(*windows.DiffDiskDriver); ok && img.Container != "" && layerData == nil {
-		// Copy the container's diff disk over the one created by the graph driver.
+	if wd, ok := graph.driver.(*windows.WindowsGraphDriver); ok && img.Container != "" && layerData == nil {
 		log.Debugf("Copying from container %s.", img.Container)
 
 		if err := wd.CopyDiff(img.Container, img.ID); err != nil {

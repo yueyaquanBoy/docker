@@ -6,7 +6,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-type DiffDiskDriver interface {
+type WindowsGraphDriver interface {
 	Driver
 	CopyDiff(id, sourceId string) error
 }
