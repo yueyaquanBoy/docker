@@ -20,22 +20,32 @@ import (
 )
 
 func init() {
-	graphdriver.Register("windows", Init)
+	graphdriver.Register("windows", InitDiff)
+	graphdriver.Register("windowsfilter", InitFilter)
 }
+
+type driverType int
+
+const (
+	diffDriver driverType = iota
+	filterDriver
+)
 
 type WindowsGraphDriver struct {
 	home       string
 	sync.Mutex // Protects concurrent modification to active
 	active     map[string]int
+	flavor     driverType
 }
 
-// New returns a new WINDOWS driver.
-func Init(home string, options []string) (graphdriver.Driver, error) {
-	log.Debugln("WindowsGraphDriver Init() home", home)
+// New returns a new WINDOWS Diff Disk driver.
+func InitDiff(home string, options []string) (graphdriver.Driver, error) {
+	log.Debugln("WindowsGraphDriver InitDiff() home", home)
 
 	d := &WindowsGraphDriver{
 		home:   home,
 		active: make(map[string]int),
+		flavor: diffDriver,
 	}
 
 	//return d, nil
@@ -43,9 +53,31 @@ func Init(home string, options []string) (graphdriver.Driver, error) {
 
 }
 
-func (*WindowsGraphDriver) String() string {
+// New returns a new WINDOWS Storage Filter driver.
+func InitFilter(home string, options []string) (graphdriver.Driver, error) {
+	log.Debugln("WindowsGraphDriver InitFilter() home", home)
+
+	d := &WindowsGraphDriver{
+		home:   home,
+		active: make(map[string]int),
+		flavor: filterDriver,
+	}
+
+	//return d, nil
+	return d, nil
+
+}
+
+func (d *WindowsGraphDriver) String() string {
 	log.Debugln("WindowsGraphDriver String()")
-	return "windows"
+	switch d.flavor {
+	case diffDriver:
+		return "windows"
+	case filterDriver:
+		return "windowsfilter"
+	default:
+		panic("unsupported driver type")
+	}
 }
 
 func (d *WindowsGraphDriver) Status() [][2]string {
@@ -78,16 +110,21 @@ func (d *WindowsGraphDriver) Create(id, parent string) error {
 	if err := os.Mkdir(dir, 0755); err != nil {
 		return err
 	}
-	if parent == "" {
-		// This is a base layer, so create a new VHD.
-		return createBaseVhd(id, dir)
-	} else {
-		// This is an intermediate layer, so create a diff-VHD from
-		// the parent.
-		parentDir := d.dir(parent)
-		log.Debugln("parentDir=", parentDir)
-		return createDiffVhd(id, dir, parentDir)
+
+	if d.flavor == diffDriver {
+		if parent == "" {
+			// This is a base layer, so create a new VHD.
+			return createBaseVhd(id, dir)
+		} else {
+			// This is an intermediate layer, so create a diff-VHD from
+			// the parent.
+			parentDir := d.dir(parent)
+			log.Debugln("parentDir=", parentDir)
+			return createDiffVhd(id, dir, parentDir)
+		}
 	}
+
+	return nil
 }
 
 func (d *WindowsGraphDriver) dir(id string) string {
@@ -107,13 +144,13 @@ func (d *WindowsGraphDriver) Remove(id string) error {
 		log.Errorf("Removing active id %s", id)
 	}
 
-	if d.active[id] > 0 {
+	if d.flavor == diffDriver && d.active[id] > 0 {
 		if err := dismountVhd(dir); err != nil {
 			return err
 		}
-	}
-	if err := os.Remove(dir + ".vhdx"); err != nil {
-		return err
+		if err := os.Remove(dir + ".vhdx"); err != nil {
+			return err
+		}
 	}
 
 	return os.RemoveAll(dir)
@@ -135,13 +172,15 @@ func (d *WindowsGraphDriver) Get(id, mountLabel string) (string, error) {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.active[id] == 0 {
-		dir, err = mountVhd(dir)
-	} else {
-		dir, err = getMountedVolumePath(dir)
-	}
-	if err != nil {
-		return "", err
+	if d.flavor == diffDriver {
+		if d.active[id] == 0 {
+			dir, err = mountVhd(dir)
+		} else {
+			dir, err = getMountedVolumePath(dir)
+		}
+		if err != nil {
+			return "", err
+		}
 	}
 
 	d.active[id]++
@@ -160,8 +199,10 @@ func (d *WindowsGraphDriver) Put(id string) error {
 	if d.active[id] > 1 {
 		d.active[id]--
 	} else if d.active[id] == 1 {
-		if err := dismountVhd(dir); err != nil {
-			return err
+		if d.flavor == diffDriver {
+			if err := dismountVhd(dir); err != nil {
+				return err
+			}
 		}
 		delete(d.active, id)
 	}
@@ -178,32 +219,36 @@ func (d *WindowsGraphDriver) Cleanup() error {
 // layer and its parent layer which may be "".
 func (d *WindowsGraphDriver) Diff(id, parent string) (arch archive.Archive, err error) {
 	// Always include the diff disk for the given layer.
-	diffFiles := []string{id + ".vhdx"}
-	prevLayer := d.dir(parent)
-	curParent, err := getParentVhdPath(d.dir(id))
-	if err != nil {
-		return nil, err
-	}
-	for strings.EqualFold((prevLayer + ".vhdx"), curParent) {
-		log.Debugf("Parent %s does not match parent %s.", (prevLayer + ".vhdx"), curParent)
-		// Add that diff to the list of files.
-		_, diffFile := filepath.Split(curParent)
-		diffFiles = append(diffFiles, diffFile)
-		curParent, err = getParentVhdPath(curParent)
+	if d.flavor == diffDriver {
+		diffFiles := []string{id + ".vhdx"}
+		prevLayer := d.dir(parent)
+		curParent, err := getParentVhdPath(d.dir(id))
 		if err != nil {
 			return nil, err
 		}
-	}
+		for strings.EqualFold((prevLayer + ".vhdx"), curParent) {
+			log.Debugf("Parent %s does not match parent %s.", (prevLayer + ".vhdx"), curParent)
+			// Add that diff to the list of files.
+			_, diffFile := filepath.Split(curParent)
+			diffFiles = append(diffFiles, diffFile)
+			curParent, err = getParentVhdPath(curParent)
+			if err != nil {
+				return nil, err
+			}
+		}
 
-	opts := &archive.TarOptions{
-		IncludeFiles: diffFiles,
-	}
+		opts := &archive.TarOptions{
+			IncludeFiles: diffFiles,
+		}
 
-	arch, err = archive.TarWithOptions(d.home, opts)
-	if err != nil {
-		return nil, err
+		arch, err = archive.TarWithOptions(d.home, opts)
+		if err != nil {
+			return nil, err
+		}
+		return arch, nil
+	} else {
+		return nil, fmt.Errorf("Windows Filter Driver: Not Implemented")
 	}
-	return arch, nil
 }
 
 // Changes produces a list of changes between the specified layer
@@ -264,25 +309,29 @@ func (d *WindowsGraphDriver) CopyDiff(sourceId, id string) error {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.active[sourceId] != 0 {
-		log.Warnf("Committing active id %s", id)
-		err := dismountVhd(d.dir(sourceId))
-		if err != nil {
+	if d.flavor == diffDriver {
+		if d.active[sourceId] != 0 {
+			log.Warnf("Committing active id %s", id)
+			err := dismountVhd(d.dir(sourceId))
+			if err != nil {
+				return err
+			}
+			defer func() {
+				_, err := mountVhd(d.dir(sourceId))
+				if err != nil {
+					log.Warnf("Failed to remount VHD: %s", err)
+				}
+			}()
+		}
+
+		if err := os.Mkdir(d.dir(id), 0755); err != nil {
 			return err
 		}
-		defer func() {
-			_, err := mountVhd(d.dir(sourceId))
-			if err != nil {
-				log.Warnf("Failed to remount VHD: %s", err)
-			}
-		}()
-	}
 
-	if err := os.Mkdir(d.dir(id), 0755); err != nil {
-		return err
+		return copyVhd(d.dir(sourceId), d.dir(id))
+	} else {
+		return fmt.Errorf("Windows Filter Driver: Not Implemented")
 	}
-
-	return copyVhd(d.dir(sourceId), d.dir(id))
 }
 
 func createBaseVhd(id string, folder string) error {
