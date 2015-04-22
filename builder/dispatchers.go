@@ -235,7 +235,8 @@ func run(b *Builder, args []string, attributes map[string]bool, original string)
 		if runtime.GOOS != "windows" {
 			args = append([]string{"/bin/sh", "-c"}, args...)
 		} else {
-			args = append([]string{"cmd", "/C"}, args...)
+			args = append([]string{"cmd", "/S /C " + `"`}, args...)
+			args = append(args, `"`)
 		}
 	}
 
@@ -298,7 +299,8 @@ func cmd(b *Builder, args []string, attributes map[string]bool, original string)
 		if runtime.GOOS != "windows" {
 			b.Config.Cmd = append([]string{"/bin/sh", "-c"}, b.Config.Cmd...)
 		} else {
-			b.Config.Cmd = append([]string{"cmd", "/C"}, b.Config.Cmd...)
+			b.Config.Cmd = append([]string{"cmd", "/S /C " + `"`}, b.Config.Cmd...)
+			b.Config.Cmd[len(b.Config.Cmd)] += `"`
 		}
 	}
 
@@ -336,7 +338,7 @@ func entrypoint(b *Builder, args []string, attributes map[string]bool, original 
 		if runtime.GOOS != "windows" {
 			b.Config.Entrypoint = []string{"/bin/sh", "-c", parsed[0]}
 		} else {
-			b.Config.Entrypoint = []string{"cmd", "/C", parsed[0]}
+			b.Config.Entrypoint = []string{"cmd", "/S /C " + `"` + parsed[0] + `"`}
 		}
 	}
 

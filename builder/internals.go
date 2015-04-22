@@ -77,7 +77,7 @@ func (b *Builder) commit(id string, autoCmd []string, comment string) error {
 		if runtime.GOOS != "windows" {
 			b.Config.Cmd = []string{"/bin/sh", "-c", "#(nop) " + comment}
 		} else {
-			b.Config.Cmd = []string{"cmd", "/C", "#(nop) " + comment}
+			b.Config.Cmd = []string{"cmd", "/S /C " + "`", "REM (nop) " + comment + `"`}
 		}
 		defer func(cmd []string) { b.Config.Cmd = cmd }(cmd)
 
@@ -192,7 +192,7 @@ func (b *Builder) runContextCommand(args []string, allowRemote bool, allowDecomp
 	if runtime.GOOS != "windows" {
 		b.Config.Cmd = []string{"/bin/sh", "-c", fmt.Sprintf("#(nop) %s %s in %s", cmdName, srcHash, dest)}
 	} else {
-		b.Config.Cmd = []string{"cmd", "/C", fmt.Sprintf("#(nop) %s %s in %s", cmdName, srcHash, dest)}
+		b.Config.Cmd = []string{"cmd", "/S /C " + `"` + fmt.Sprintf("REM (nop) %s %s in %s", cmdName, srcHash, dest) + `"`}
 	}
 	defer func(cmd []string) { b.Config.Cmd = cmd }(cmd)
 
