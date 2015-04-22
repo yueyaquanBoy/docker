@@ -279,7 +279,13 @@ func (d *WindowsGraphDriver) Changes(id, parent string) ([]archive.Change, error
 func (d *WindowsGraphDriver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (size int64, err error) {
 	start := time.Now().UTC()
 	log.Debugf("Start untar layer")
-	if size, err = chrootarchive.ApplyLayer(d.home, diff); err != nil {
+
+	destination := d.dir(id)
+	if d.flavor == diffDriver {
+		destination = filepath.Dir(destination)
+	}
+
+	if size, err = chrootarchive.ApplyLayer(destination, diff); err != nil {
 		return
 	}
 	log.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())
