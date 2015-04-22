@@ -2,6 +2,7 @@ package runconfig
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -99,6 +100,15 @@ func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSe
 			return nil, nil, cmd, fmt.Errorf("%s is not a valid mac address", *flMacAddress)
 		}
 	}
+
+	// Workaround for //BUILD demo. If environment variable
+	// fixedmacworkaround is set, use that when calling daemon.
+	if *flMacAddress == "" {
+		if ma := os.Getenv("fixedmacworkaround"); ma != "" {
+			*flMacAddress = ma
+		}
+	}
+
 	var (
 		attachStdin  = flAttach.Get("stdin")
 		attachStdout = flAttach.Get("stdout")
