@@ -144,9 +144,11 @@ func (d *WindowsGraphDriver) Remove(id string) error {
 		log.Errorf("Removing active id %s", id)
 	}
 
-	if d.flavor == diffDriver && d.active[id] > 0 {
-		if err := dismountVhd(dir); err != nil {
-			return err
+	if d.flavor == diffDriver {
+		if d.active[id] > 0 {
+			if err := dismountVhd(dir); err != nil {
+				return err
+			}
 		}
 		if err := os.Remove(dir + ".vhdx"); err != nil {
 			return err
