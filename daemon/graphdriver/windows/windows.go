@@ -141,7 +141,7 @@ func (d *WindowsGraphDriver) Remove(id string) error {
 	defer d.Unlock()
 
 	if d.active[id] != 0 {
-		log.Errorf("Removing active id %s", id)
+		log.Warnf("Removing active id %s", id)
 	}
 
 	if d.flavor == diffDriver {
@@ -150,7 +150,7 @@ func (d *WindowsGraphDriver) Remove(id string) error {
 				return err
 			}
 		}
-		if err := os.Remove(dir + ".vhdx"); err != nil {
+		if err := os.Remove(dir + ".vhdx"); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}
