@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -164,6 +165,10 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		VolumePath  string
 		Definitions []defConfig
 		Devices     []device
+	}
+
+	if len(os.Getenv("windowsexecdummy")) > 0 {
+		c.Dummy = true
 	}
 
 	cu := &containerInit{
