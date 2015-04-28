@@ -51,7 +51,7 @@ func CreateDiffVhd(newVhdPath, parentVhdPath string) error {
 	return nil
 }
 
-func MountVhd(vhdPath string) (string, error) {
+func MountVhd(vhdPath string) error {
 	log.Debugln("hcsshim::MountVhd")
 	log.Debugln("vhdPath:", vhdPath)
 
@@ -61,22 +61,17 @@ func MountVhd(vhdPath string) (string, error) {
 		return "", err
 	}
 
-	var volumePathp [256]uint16
-	volumePathp[0] = 0
-
 	// Call the procedure itself.
 	r1, _, _ := procMountVhd.Call(
-		uintptr(unsafe.Pointer(vhdPathp)),
-		uintptr(unsafe.Pointer(&volumePathp)))
+		uintptr(unsafe.Pointer(vhdPathp)))
 
 	use(unsafe.Pointer(vhdPathp))
-	use(unsafe.Pointer(&volumePathp))
 
 	if r1 != 0 {
-		return "", syscall.Errno(r1)
+		return syscall.Errno(r1)
 	}
 
-	return syscall.UTF16ToString(volumePathp[0:]), nil
+	return nil
 }
 
 func DismountVhd(vhdPath string) error {

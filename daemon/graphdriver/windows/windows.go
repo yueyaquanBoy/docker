@@ -412,7 +412,11 @@ func createDiffVhd(id string, folder string, parent string) error {
 func mountVhd(path string) (string, error) {
 	vhdPath := path + ".vhdx"
 
-	return hcsshim.MountVhd(vhdPath)
+	if err := hcsshim.MountVhd(vhdPath); err != nil {
+		return "", err
+	}
+
+	return getMountedVolumePath(vhdPath)
 }
 
 func dismountVhd(path string) error {
