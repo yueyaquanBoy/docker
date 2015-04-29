@@ -13,11 +13,60 @@ import (
 )
 
 var (
+	procCreateBaseVhd    = modvmcompute.NewProc("CreateBaseVhd")
 	procCreateDiffVhd    = modvmcompute.NewProc("CreateDiffVhd")
+	procFormatVhd        = modvmcompute.NewProc("FormatVhd")
 	procMountVhd         = modvmcompute.NewProc("MountVhd")
 	procDismountVhd      = modvmcompute.NewProc("DismountVhd")
 	procGetVhdVolumePath = modvmcompute.NewProc("GetVhdVolumePath")
 )
+
+func CreateBaseVhd(newVhdPath string, newSize uint64) error {
+	log.Debugln("hcsshim::CreateBaseVhd")
+	log.Debugln("newVhdPath:", newVhdPath)
+
+	newVhdPathp, err := syscall.UTF16PtrFromString(newVhdPath)
+	if err != nil {
+		log.Debugln("Failed conversion of newVhdPath to pointer:", err)
+		return err
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procCreateBaseVhd.Call(
+		uintptr(unsafe.Pointer(newVhdPathp)),
+		uintptr(newSize))
+
+	use(unsafe.Pointer(newVhdPathp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func FormatVhd(vhdPath string) error {
+	log.Debugln("hcsshim::FormatVhd")
+	log.Debugln("vhdPath:", vhdPath)
+
+	vhdPathp, err := syscall.UTF16PtrFromString(vhdPath)
+	if err != nil {
+		log.Debugln("Failed conversion of vhdPath to pointer:", err)
+		return err
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procFormatVhd.Call(
+		uintptr(unsafe.Pointer(vhdPathp)))
+
+	use(unsafe.Pointer(vhdPathp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
 
 func CreateDiffVhd(newVhdPath, parentVhdPath string) error {
 	log.Debugln("hcsshim::CreateDiffVhd")
@@ -58,7 +107,7 @@ func MountVhd(vhdPath string) error {
 	vhdPathp, err := syscall.UTF16PtrFromString(vhdPath)
 	if err != nil {
 		log.Debugln("Failed conversion of vhdPath to pointer:", err)
-		return "", err
+		return err
 	}
 
 	// Call the procedure itself.

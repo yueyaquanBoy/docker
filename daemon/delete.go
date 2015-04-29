@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
