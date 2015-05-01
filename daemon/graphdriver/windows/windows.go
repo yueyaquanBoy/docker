@@ -369,7 +369,15 @@ func mountVhd(path string) (string, error) {
 		return "", err
 	}
 
-	return hcsshim.GetVhdVolumePath(vhdPath)
+	volPath, err := hcsshim.GetVhdVolumePath(vhdPath)
+	if err != nil {
+		if err2 := hcsshim.DismountVhd(vhdPath); err2 != nil {
+			log.Errorf("Failed to dismount disk '%s': %s", vhdPath, err2.Error())
+		}
+		return "", err
+	}
+
+	return volPath, nil
 }
 
 func dismountVhd(path string) error {
