@@ -15,7 +15,6 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
 	"github.com/docker/docker/pkg/hcsshim"
-	"github.com/docker/docker/pkg/pshell"
 	"github.com/docker/docker/pkg/system"
 )
 
@@ -224,7 +223,7 @@ func (d *WindowsGraphDriver) Diff(id, parent string) (arch archive.Archive, err 
 	if d.flavor == diffDriver {
 		diffFiles := []string{id + ".vhdx"}
 		prevLayer := d.dir(parent)
-		curParent, err := getParentVhdPath(d.dir(id))
+		curParent, err := getParentVhdPath(d.dir(id) + ".vhdx")
 		if err != nil {
 			return nil, err
 		}
@@ -343,63 +342,17 @@ func (d *WindowsGraphDriver) CopyDiff(sourceId, id string) error {
 }
 
 func createBaseVhd(id string, folder string) error {
-	// This script will create a VHD as a peer of the given folder,
-	// NOTE: the indentation must be spaces and not tabs, otherwise
-	// the powershell invocation will fail.
-	script := `
-    $name = "` + id + `"
-    $folder = "` + folder + `"
-    $path = "$(Split-Path $folder)\$name.vhdx"
-    function throwifnull {
-        if ($args[0] -eq $null){
-            throw
-        }
-    }
-    try {
-        $vhd = New-VHD -Path $path -Dynamic -SizeBytes 20gb
-        throwifnull $vhd
-        $mounted = $vhd | Mount-VHD -Passthru
-        throwifnull $mounted
-        $disk = $mounted | Get-Disk | Initialize-Disk -PassThru
-        throwifnull $disk
-        $partition = $disk | New-Partition -UseMaximumSize
-        throwifnull $partition
-        $volume = $partition | Format-Volume -FileSystem NTFS -NewFileSystemLabel "disk_$name" -Confirm:$false
-        throwifnull $volume
-        mountvol $folder $volume.Path
-        Dismount-VHD $mounted.Path
-    }catch{
-        if ($mounted){Dismount-VHD $mounted.Path}
-        if (Test-Path $path){rm $path}
-        throw
-    }
-    `
+	newVhdPath := filepath.Join(filepath.Dir(folder), id) + ".vhdx"
 
-	log.Debugln("Attempting to create base vhdx named '", id, "'at'", folder, "'")
-	_, err := pshell.ExecutePowerShell(script)
-	return err
+	if err := hcsshim.CreateBaseVhd(newVhdPath, 20); err != nil {
+		return err
+	}
+
+	return hcsshim.FormatVhd(newVhdPath)
 }
 
-func getParentVhdPath(id string) (string, error) {
-	// This script will check a VHD for a parent VHD path.
-	// NOTE: the indentation must be spaces and not tabs, otherwise
-	// the powershell invocation will fail.
-	script := `
-    $vhdPath = "` + id + `"
-    if (!$vhdPath.EndsWith(".vhdx")){$vhdPath += ".vhdx"}
-    function throwifnull {
-        if ($args[0] -eq $null){
-            throw
-        }
-    }
-    $vhd = Get-VHD -Path $vhdPath
-    throwifnull $vhd
-    $vhd.ParentPath
-    `
-
-	log.Debugln("Attempting to get parent path of '", id, "'")
-	parentPath, err := pshell.ExecutePowerShell(script)
-	return parentPath, err
+func getParentVhdPath(vhdPath string) (string, error) {
+	return hcsshim.GetVhdParentPath(vhdPath)
 }
 
 func createDiffVhd(id string, folder string, parent string) error {
