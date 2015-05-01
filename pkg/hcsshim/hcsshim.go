@@ -68,15 +68,12 @@ func CreateComputeSystem(ID string, Configuration string) error {
 		return err
 	}
 
-	IDup := unsafe.Pointer(IDp)
-	Configurationup := unsafe.Pointer(Configurationp)
-
 	// Call the procedure itself.
-	r1, _, _ := procCreateComputeSystem.Call(uintptr(IDup),
-		uintptr(Configurationup))
+	r1, _, _ := procCreateComputeSystem.Call(
+		uintptr(unsafe.Pointer(IDp)), uintptr(unsafe.Pointer(Configurationp)))
 
-	use(IDup)
-	use(Configurationup)
+	use(unsafe.Pointer(IDp))
+	use(unsafe.Pointer(Configurationp))
 
 	if r1 != 0 {
 		return syscall.Errno(r1)
@@ -96,12 +93,11 @@ func StartComputeSystem(ID string) error {
 		log.Debugln("Failed conversion of ID to pointer ", err)
 		return err
 	}
-	IDup := unsafe.Pointer(IDp)
 
 	// Call the procedure itself.
-	r1, _, _ := procStartComputeSystem.Call(uintptr(IDup))
+	r1, _, _ := procStartComputeSystem.Call(uintptr(unsafe.Pointer(IDp)))
 
-	use(IDup)
+	use(unsafe.Pointer(IDp))
 
 	if r1 != 0 {
 		return syscall.Errno(r1)
@@ -192,33 +188,24 @@ func CreateProcessInComputeSystem(ID string,
 	// To get a POINTER to the PID
 	pid := new(uint32)
 
-	internalDevicesup := unsafe.Pointer(internalDevices)
-	IDup := unsafe.Pointer(IDp)
-	ApplicationNameup := unsafe.Pointer(ApplicationNamep)
-	CommandLineup := unsafe.Pointer(CommandLinep)
-	WorkingDirup := unsafe.Pointer(WorkingDirp)
-	pidup := unsafe.Pointer(pid)
-
 	log.Debugln("Calling the procedure itself")
 
 	// Call the procedure itself.
 	r1, _, _ := procCreateProcessInComputeSystem.Call(
-		uintptr(IDup),
-		uintptr(ApplicationNameup),
-		uintptr(CommandLineup),
-		uintptr(WorkingDirup),
+		uintptr(unsafe.Pointer(IDp)),
+		uintptr(unsafe.Pointer(ApplicationNamep)),
+		uintptr(unsafe.Pointer(CommandLinep)),
+		uintptr(unsafe.Pointer(WorkingDirp)),
 		uintptr(0), // Environment to follow later
-		uintptr(internalDevicesup),
+		uintptr(unsafe.Pointer(internalDevices)),
 		uintptr(EmulateTTY),
-		uintptr(pidup))
+		uintptr(unsafe.Pointer(pid)))
 
 	use(unsafe.Pointer(internalDevices))
-	use(internalDevicesup)
-	use(IDup)
-	use(ApplicationNameup)
-	use(CommandLineup)
-	use(WorkingDirup)
-	use(pidup)
+	use(unsafe.Pointer(IDp))
+	use(unsafe.Pointer(ApplicationNamep))
+	use(unsafe.Pointer(CommandLinep))
+	use(unsafe.Pointer(WorkingDirp))
 
 	log.Debugln("Returned from procedure call")
 
@@ -251,18 +238,14 @@ func WaitForProcessInComputeSystem(ID string, ProcessId uint32) (ExitCode uint32
 	// To get a POINTER to the ExitCode
 	ec := new(uint32)
 
-	IDup := unsafe.Pointer(IDp)
-	ecup := unsafe.Pointer(ec)
-
 	// Call the procedure itself.
 	r1, _, err := procWaitForProcessInComputeSystem.Call(
-		uintptr(IDup),
+		uintptr(unsafe.Pointer(IDp)),
 		uintptr(ProcessId),
 		uintptr(Timeout),
-		uintptr(ecup))
+		uintptr(unsafe.Pointer(ec)))
 
-	use(IDup)
-	use(ecup)
+	use(unsafe.Pointer(IDp))
 
 	if r1 != 0 {
 		return 0, syscall.Errno(r1)
@@ -285,14 +268,12 @@ func TerminateProcessInComputeSystem(ID string, ProcessId uint32) (err error) {
 		return err
 	}
 
-	IDup := unsafe.Pointer(IDp)
-
 	// Call the procedure itself.
 	r1, _, err := procTerminateProcessInComputeSystem.Call(
-		uintptr(IDup),
+		uintptr(unsafe.Pointer(IDp)),
 		uintptr(ProcessId))
 
-	use(IDup)
+	use(unsafe.Pointer(IDp))
 
 	if r1 != 0 {
 		return syscall.Errno(r1)
@@ -315,12 +296,11 @@ func ShutdownComputeSystem(ID string) error {
 
 	timeout := uint32(0xffffffff)
 
-	IDup := unsafe.Pointer(IDp)
-
 	// Call the procedure itself.
-	r1, _, err := procShutdownComputeSystem.Call(uintptr(IDup), uintptr(timeout))
+	r1, _, err := procShutdownComputeSystem.Call(
+		uintptr(unsafe.Pointer(IDp)), uintptr(timeout))
 
-	use(IDup)
+	use(unsafe.Pointer(IDp))
 
 	if r1 != 0 {
 		return syscall.Errno(r1)
