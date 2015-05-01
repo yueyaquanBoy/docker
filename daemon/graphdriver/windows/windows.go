@@ -369,7 +369,7 @@ func mountVhd(path string) (string, error) {
 		return "", err
 	}
 
-	return getMountedVolumePath(vhdPath)
+	return hcsshim.GetVhdVolumePath(vhdPath)
 }
 
 func dismountVhd(path string) error {
