@@ -1,10 +1,15 @@
 package graph
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"strings"
 	"syscall"
+
+	"github.com/docker/docker/image"
+	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/utils"
 )
 
 // setupInitLayer populates a directory with mountpoints suitable
