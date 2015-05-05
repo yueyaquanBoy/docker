@@ -39,6 +39,8 @@ clone() {
 	echo done
 }
 
+clone git github.com/cznic/ql 75e83330dacd63a735e9e87bcf19dad84d1f6274
+
 clone git github.com/kr/pty 05017fcccf
 
 clone git github.com/gorilla/context 14f550f51a
