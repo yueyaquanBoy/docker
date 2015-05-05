@@ -51,6 +51,12 @@ clone git github.com/cznic/strutil 1eb03e3cc9d345307a45ec82bd3016cde4bd4464
 
 clone git github.com/cznic/zappy 47331054e4f96186e3ff772877c0443909368a45
 
+clone git github.com/cznic/bufs 3dcccbd7064a1689f9c093a988ea11ac00e21f51
+
+clone git github.com/cznic/fileutil 21ae57c9dce724a15e88bd9cd46d5668f3e880a5
+
+clone git github.com/cznic/sortutil d4401851b4c370f979b842fa1e45e0b3b718b391
+
 clone git github.com/cznic/ql 75e83330dacd63a735e9e87bcf19dad84d1f6274
 
 clone git github.com/kr/pty 05017fcccf
