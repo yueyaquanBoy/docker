@@ -41,6 +41,14 @@ clone() {
 
 clone git github.com/camlistore/lock ae27720f340952636b826119b58130b9c1a847a0
 
+clone git github.com/cznic/b e2e747ce049fb910cff6b1fd7ad8faf3900939d5
+
+clone git github.com/cznic/exp 9b0e4be12fbdb7b843e0a658a04c35d160371789
+
+clone git github.com/cznic/mathutil f9551431b78e71ee24939a1e9d8f49f43898b5cd
+
+clone git github.com/cznic/strutil 1eb03e3cc9d345307a45ec82bd3016cde4bd4464
+
 clone git github.com/cznic/zappy 47331054e4f96186e3ff772877c0443909368a45
 
 clone git github.com/cznic/ql 75e83330dacd63a735e9e87bcf19dad84d1f6274
