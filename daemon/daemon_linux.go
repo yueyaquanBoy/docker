@@ -23,6 +23,7 @@ import (
 	"github.com/docker/docker/daemon/networkdriver/portallocator"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/graph"
+	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/graphdb"
 	"github.com/docker/docker/pkg/networkfs/resolvconf"
 	"github.com/docker/docker/pkg/parsers/kernel"
