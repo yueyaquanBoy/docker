@@ -39,6 +39,8 @@ clone() {
 	echo done
 }
 
+clone git github.com/camlistore/lock ae27720f340952636b826119b58130b9c1a847a0
+
 clone git github.com/cznic/zappy 47331054e4f96186e3ff772877c0443909368a45
 
 clone git github.com/cznic/ql 75e83330dacd63a735e9e87bcf19dad84d1f6274
