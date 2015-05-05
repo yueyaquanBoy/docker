@@ -4,8 +4,6 @@ package graphdb
 
 import (
 	"database/sql"
-
-	_ "code.google.com/p/gosqlite/sqlite3" // registers sqlite
 )
 
 func NewSqliteConn(root string) (*Database, error) {
