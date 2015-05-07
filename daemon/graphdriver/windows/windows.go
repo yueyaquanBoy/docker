@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -47,9 +48,7 @@ func InitDiff(home string, options []string) (graphdriver.Driver, error) {
 		flavor: diffDriver,
 	}
 
-	//return d, nil
 	return d, nil
-
 }
 
 // New returns a new WINDOWS Storage Filter driver.
@@ -62,9 +61,7 @@ func InitFilter(home string, options []string) (graphdriver.Driver, error) {
 		flavor: filterDriver,
 	}
 
-	//return d, nil
 	return d, nil
-
 }
 
 func (d *WindowsGraphDriver) String() string {
@@ -89,13 +86,19 @@ func (d *WindowsGraphDriver) Status() [][2]string {
 // Exists returns true if the given id is registered with
 // this driver
 func (d *WindowsGraphDriver) Exists(id string) bool {
-	_, err := system.Lstat(d.dir(id))
-	if err == nil {
-		log.Debugln("WindowsGraphDriver Exists() - DOES", id, d.dir(id))
-	} else {
-		log.Debugln("WindowsGraphDriver Exists() - DOES NOT EXIST", id, d.dir(id))
+	info, err := d.info()
+	if err != nil {
+		log.Errorf("Unable to get driver info: %s", err.Error())
+		return false
 	}
-	return err == nil
+
+	result, err := hcsshim.LayerExists(info, id)
+	if err != nil {
+		log.Errorf("LayerExists call failed: %s", err.Error())
+		return false
+	}
+
+	return result
 }
 
 func (d *WindowsGraphDriver) Create(id, parent string) error {
@@ -128,6 +131,19 @@ func (d *WindowsGraphDriver) Create(id, parent string) error {
 
 func (d *WindowsGraphDriver) dir(id string) string {
 	return filepath.Join(d.home, filepath.Base(id))
+}
+
+func (d *WindowsGraphDriver) info() (hcsshim.DriverInfo, error) {
+	homedirp, err := syscall.UTF16PtrFromString(d.home)
+	if err != nil {
+		log.Debugln("Failed conversion of home to pointer ", err)
+		return hcsshim.DriverInfo{}, err
+	}
+
+	return hcsshim.DriverInfo{
+		Flavor:   int(d.flavor),
+		HomeDirp: homedirp,
+	}, nil
 }
 
 // Unmount and remove the dir information

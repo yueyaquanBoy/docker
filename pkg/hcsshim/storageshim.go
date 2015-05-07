@@ -98,18 +98,13 @@ func InitializeStorageSandbox(sandboxPath string, parentLayerPaths []string) err
 
 	layerDescriptorsp = &(layers[0])
 
-	sandboxPathup := unsafe.Pointer(sandboxPathp)
-	layerDescriptorsup := unsafe.Pointer(layerDescriptorsp)
-
 	// Call the procedure itself.
 	r1, _, _ := procInitSandbox.Call(
-		uintptr(sandboxPathup),
-		uintptr(layerDescriptorsup),
+		uintptr(unsafe.Pointer(sandboxPathp)),
+		uintptr(unsafe.Pointer(layerDescriptorsp)),
 		uintptr(len(layers)))
 	use(unsafe.Pointer(sandboxPathp))
-	use(sandboxPathup)
 	use(unsafe.Pointer(layerDescriptorsp))
-	use(layerDescriptorsup)
 
 	if r1 != 0 {
 		return syscall.Errno(r1)
@@ -136,12 +131,9 @@ func RemoveFileOrReparsePoint(filePath string) error {
 		return err
 	}
 
-	filePathup := unsafe.Pointer(filePathp)
-
 	// Call the procedure itself.
-	r1, _, _ := procRemoveFile.Call(uintptr(filePathup))
+	r1, _, _ := procRemoveFile.Call(uintptr(unsafe.Pointer(filePathp)))
 	use(unsafe.Pointer(filePathp))
-	use(filePathup)
 
 	if r1 != 0 {
 		return syscall.Errno(r1)
