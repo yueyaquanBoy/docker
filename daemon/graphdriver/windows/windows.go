@@ -15,27 +15,36 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
 	"github.com/docker/docker/pkg/hcsshim"
-	"github.com/docker/docker/pkg/pshell"
 	"github.com/docker/docker/pkg/system"
 )
 
 func init() {
-	graphdriver.Register("windows", Init)
+	graphdriver.Register("windows", InitDiff)
+	graphdriver.Register("windowsfilter", InitFilter)
 }
 
-type DiffDiskDriver struct {
+type driverType int
+
+const (
+	diffDriver driverType = iota
+	filterDriver
+)
+
+type WindowsGraphDriver struct {
 	home       string
 	sync.Mutex // Protects concurrent modification to active
 	active     map[string]int
+	flavor     driverType
 }
 
-// New returns a new WINDOWS driver.
-func Init(home string, options []string) (graphdriver.Driver, error) {
-	log.Debugln("WindowsGraphDriver Init() home", home)
+// New returns a new WINDOWS Diff Disk driver.
+func InitDiff(home string, options []string) (graphdriver.Driver, error) {
+	log.Debugln("WindowsGraphDriver InitDiff() home", home)
 
-	d := &DiffDiskDriver{
+	d := &WindowsGraphDriver{
 		home:   home,
 		active: make(map[string]int),
+		flavor: diffDriver,
 	}
 
 	//return d, nil
@@ -43,12 +52,34 @@ func Init(home string, options []string) (graphdriver.Driver, error) {
 
 }
 
-func (*DiffDiskDriver) String() string {
-	log.Debugln("WindowsGraphDriver String()")
-	return "windows"
+// New returns a new WINDOWS Storage Filter driver.
+func InitFilter(home string, options []string) (graphdriver.Driver, error) {
+	log.Debugln("WindowsGraphDriver InitFilter() home", home)
+
+	d := &WindowsGraphDriver{
+		home:   home,
+		active: make(map[string]int),
+		flavor: filterDriver,
+	}
+
+	//return d, nil
+	return d, nil
+
 }
 
-func (d *DiffDiskDriver) Status() [][2]string {
+func (d *WindowsGraphDriver) String() string {
+	log.Debugln("WindowsGraphDriver String()")
+	switch d.flavor {
+	case diffDriver:
+		return "windows"
+	case filterDriver:
+		return "windowsfilter"
+	default:
+		panic("unsupported driver type")
+	}
+}
+
+func (d *WindowsGraphDriver) Status() [][2]string {
 	log.Debugln("WindowsGraphDriver Status()")
 	return [][2]string{
 		{"Windows", "To be confirmed what should be returned by Windows Storage Driver"},
@@ -57,7 +88,7 @@ func (d *DiffDiskDriver) Status() [][2]string {
 
 // Exists returns true if the given id is registered with
 // this driver
-func (d *DiffDiskDriver) Exists(id string) bool {
+func (d *WindowsGraphDriver) Exists(id string) bool {
 	_, err := system.Lstat(d.dir(id))
 	if err == nil {
 		log.Debugln("WindowsGraphDriver Exists() - DOES", id, d.dir(id))
@@ -67,7 +98,7 @@ func (d *DiffDiskDriver) Exists(id string) bool {
 	return err == nil
 }
 
-func (d *DiffDiskDriver) Create(id, parent string) error {
+func (d *WindowsGraphDriver) Create(id, parent string) error {
 	log.Debugln("WindowsGraphDriver Create() id:", id, ", parent:", parent)
 
 	dir := d.dir(id)
@@ -78,24 +109,29 @@ func (d *DiffDiskDriver) Create(id, parent string) error {
 	if err := os.Mkdir(dir, 0755); err != nil {
 		return err
 	}
-	if parent == "" {
-		// This is a base layer, so create a new VHD.
-		return CreateBaseVhd(id, dir)
-	} else {
-		// This is an intermediate layer, so create a diff-VHD from
-		// the parent.
-		parentDir := d.dir(parent)
-		log.Debugln("parentDir=", parentDir)
-		return CreateDiffVhd(id, dir, parentDir)
+
+	if d.flavor == diffDriver {
+		if parent == "" {
+			// This is a base layer, so create a new VHD.
+			return createBaseVhd(id, dir)
+		} else {
+			// This is an intermediate layer, so create a diff-VHD from
+			// the parent.
+			parentDir := d.dir(parent)
+			log.Debugln("parentDir=", parentDir)
+			return createDiffVhd(id, dir, parentDir)
+		}
 	}
+
+	return nil
 }
 
-func (d *DiffDiskDriver) dir(id string) string {
+func (d *WindowsGraphDriver) dir(id string) string {
 	return filepath.Join(d.home, filepath.Base(id))
 }
 
 // Unmount and remove the dir information
-func (d *DiffDiskDriver) Remove(id string) error {
+func (d *WindowsGraphDriver) Remove(id string) error {
 	log.Debugln("WindowsGraphDriver Remove()", id)
 
 	dir := d.dir(id)
@@ -104,16 +140,18 @@ func (d *DiffDiskDriver) Remove(id string) error {
 	defer d.Unlock()
 
 	if d.active[id] != 0 {
-		log.Errorf("Removing active id %s", id)
+		log.Warnf("Removing active id %s", id)
 	}
 
-	if d.active[id] > 0 {
-		if err := DismountVhd(dir); err != nil {
+	if d.flavor == diffDriver {
+		if d.active[id] > 0 {
+			if err := dismountVhd(dir); err != nil {
+				return err
+			}
+		}
+		if err := os.Remove(dir + ".vhdx"); err != nil && !os.IsNotExist(err) {
 			return err
 		}
-	}
-	if err := os.Remove(dir + ".vhdx"); err != nil {
-		return err
 	}
 
 	return os.RemoveAll(dir)
@@ -121,7 +159,7 @@ func (d *DiffDiskDriver) Remove(id string) error {
 
 // Return the rootfs path for the id
 // This will mount the dir at it's given path
-func (d *DiffDiskDriver) Get(id, mountLabel string) (string, error) {
+func (d *WindowsGraphDriver) Get(id, mountLabel string) (string, error) {
 	log.Debugln("WindowsGraphDriver Get() id:", id, ", mountLabel:", mountLabel)
 
 	dir := d.dir(id)
@@ -135,13 +173,15 @@ func (d *DiffDiskDriver) Get(id, mountLabel string) (string, error) {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.active[id] == 0 {
-		dir, err = MountVhd(dir)
-	} else {
-		dir, err = GetMountedVolumePath(dir)
-	}
-	if err != nil {
-		return "", err
+	if d.flavor == diffDriver {
+		if d.active[id] == 0 {
+			dir, err = mountVhd(dir)
+		} else {
+			dir, err = getMountedVolumePath(dir)
+		}
+		if err != nil {
+			return "", err
+		}
 	}
 
 	d.active[id]++
@@ -149,7 +189,7 @@ func (d *DiffDiskDriver) Get(id, mountLabel string) (string, error) {
 	return dir, nil
 }
 
-func (d *DiffDiskDriver) Put(id string) error {
+func (d *WindowsGraphDriver) Put(id string) error {
 	log.Debugln("WindowsGraphDriver Put() id:", id)
 
 	dir := d.dir(id)
@@ -160,8 +200,10 @@ func (d *DiffDiskDriver) Put(id string) error {
 	if d.active[id] > 1 {
 		d.active[id]--
 	} else if d.active[id] == 1 {
-		if err := DismountVhd(dir); err != nil {
-			return err
+		if d.flavor == diffDriver {
+			if err := dismountVhd(dir); err != nil {
+				return err
+			}
 		}
 		delete(d.active, id)
 	}
@@ -169,46 +211,50 @@ func (d *DiffDiskDriver) Put(id string) error {
 	return nil
 }
 
-func (d *DiffDiskDriver) Cleanup() error {
+func (d *WindowsGraphDriver) Cleanup() error {
 	log.Debugln("WindowsGraphDriver Cleanup()")
 	return nil
 }
 
 // Diff produces an archive of the changes between the specified
 // layer and its parent layer which may be "".
-func (d *DiffDiskDriver) Diff(id, parent string) (arch archive.Archive, err error) {
+func (d *WindowsGraphDriver) Diff(id, parent string) (arch archive.Archive, err error) {
 	// Always include the diff disk for the given layer.
-	diffFiles := []string{id + ".vhdx"}
-	prevLayer := d.dir(parent)
-	curParent, err := GetParentVhdPath(d.dir(id))
-	if err != nil {
-		return nil, err
-	}
-	for strings.EqualFold((prevLayer + ".vhdx"), curParent) {
-		log.Debugf("Parent %s does not match parent %s.", (prevLayer + ".vhdx"), curParent)
-		// Add that diff to the list of files.
-		_, diffFile := filepath.Split(curParent)
-		diffFiles = append(diffFiles, diffFile)
-		curParent, err = GetParentVhdPath(curParent)
+	if d.flavor == diffDriver {
+		diffFiles := []string{id + ".vhdx"}
+		prevLayer := d.dir(parent)
+		curParent, err := getParentVhdPath(d.dir(id) + ".vhdx")
 		if err != nil {
 			return nil, err
 		}
-	}
+		for strings.EqualFold((prevLayer + ".vhdx"), curParent) {
+			log.Debugf("Parent %s does not match parent %s.", (prevLayer + ".vhdx"), curParent)
+			// Add that diff to the list of files.
+			_, diffFile := filepath.Split(curParent)
+			diffFiles = append(diffFiles, diffFile)
+			curParent, err = getParentVhdPath(curParent)
+			if err != nil {
+				return nil, err
+			}
+		}
 
-	opts := &archive.TarOptions{
-		IncludeFiles: diffFiles,
-	}
+		opts := &archive.TarOptions{
+			IncludeFiles: diffFiles,
+		}
 
-	arch, err = archive.TarWithOptions(d.home, opts)
-	if err != nil {
-		return nil, err
+		arch, err = archive.TarWithOptions(d.home, opts)
+		if err != nil {
+			return nil, err
+		}
+		return arch, nil
+	} else {
+		return nil, fmt.Errorf("Windows Filter Driver: Not Implemented")
 	}
-	return arch, nil
 }
 
 // Changes produces a list of changes between the specified layer
 // and its parent layer. If parent is "", then all changes will be ADD changes.
-func (d *DiffDiskDriver) Changes(id, parent string) ([]archive.Change, error) {
+func (d *WindowsGraphDriver) Changes(id, parent string) ([]archive.Change, error) {
 	layerFs, err := d.Get(id, "")
 	if err != nil {
 		return nil, err
@@ -231,10 +277,16 @@ func (d *DiffDiskDriver) Changes(id, parent string) ([]archive.Change, error) {
 // ApplyDiff extracts the changeset from the given diff into the
 // layer with the specified id and parent, returning the size of the
 // new layer in bytes.
-func (d *DiffDiskDriver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (size int64, err error) {
+func (d *WindowsGraphDriver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (size int64, err error) {
 	start := time.Now().UTC()
 	log.Debugf("Start untar layer")
-	if size, err = chrootarchive.ApplyLayer(d.home, diff); err != nil {
+
+	destination := d.dir(id)
+	if d.flavor == diffDriver {
+		destination = filepath.Dir(destination)
+	}
+
+	if size, err = chrootarchive.ApplyLayer(destination, diff); err != nil {
 		return
 	}
 	log.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())
@@ -245,7 +297,7 @@ func (d *DiffDiskDriver) ApplyDiff(id, parent string, diff archive.ArchiveReader
 // DiffSize calculates the changes between the specified layer
 // and its parent and returns the size in bytes of the changes
 // relative to its base filesystem directory.
-func (d *DiffDiskDriver) DiffSize(id, parent string) (size int64, err error) {
+func (d *WindowsGraphDriver) DiffSize(id, parent string) (size int64, err error) {
 	changes, err := d.Changes(id, parent)
 	if err != nil {
 		return
@@ -260,117 +312,87 @@ func (d *DiffDiskDriver) DiffSize(id, parent string) (size int64, err error) {
 	return archive.ChangesSize(layerFs, changes), nil
 }
 
-func (d *DiffDiskDriver) CopyDiff(sourceId, id string) error {
+func (d *WindowsGraphDriver) CopyDiff(sourceId, id string) error {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.active[sourceId] != 0 {
-		log.Warnf("Committing active id %s", id)
-		err := DismountVhd(d.dir(sourceId))
-		if err != nil {
+	if d.flavor == diffDriver {
+		if d.active[sourceId] != 0 {
+			log.Warnf("Committing active id %s", id)
+			err := dismountVhd(d.dir(sourceId))
+			if err != nil {
+				return err
+			}
+			defer func() {
+				_, err := mountVhd(d.dir(sourceId))
+				if err != nil {
+					log.Warnf("Failed to remount VHD: %s", err)
+				}
+			}()
+		}
+
+		if err := os.Mkdir(d.dir(id), 0755); err != nil {
 			return err
 		}
-		defer func() {
-			_, err := MountVhd(d.dir(sourceId))
-			if err != nil {
-				log.Warnf("Failed to remount VHD: %s", err)
-			}
-		}()
-	}
 
-	if err := os.Mkdir(d.dir(id), 0755); err != nil {
+		return copyVhd(d.dir(sourceId), d.dir(id))
+	} else {
+		return fmt.Errorf("Windows Filter Driver: Not Implemented")
+	}
+}
+
+func createBaseVhd(id string, folder string) error {
+	newVhdPath := filepath.Join(filepath.Dir(folder), id) + ".vhdx"
+
+	if err := hcsshim.CreateBaseVhd(newVhdPath, 20); err != nil {
 		return err
 	}
 
-	return CopyVhd(d.dir(sourceId), d.dir(id))
+	return hcsshim.FormatVhd(newVhdPath)
 }
 
-func CreateBaseVhd(id string, folder string) error {
-	// This script will create a VHD as a peer of the given folder,
-	// NOTE: the indentation must be spaces and not tabs, otherwise
-	// the powershell invocation will fail.
-	script := `
-    $name = "` + id + `"
-    $folder = "` + folder + `"
-    $path = "$(Split-Path $folder)\$name.vhdx"
-    function throwifnull {
-        if ($args[0] -eq $null){
-            throw
-        }
-    }
-    try {
-        $vhd = New-VHD -Path $path -Dynamic -SizeBytes 20gb
-        throwifnull $vhd
-        $mounted = $vhd | Mount-VHD -Passthru
-        throwifnull $mounted
-        $disk = $mounted | Get-Disk | Initialize-Disk -PassThru
-        throwifnull $disk
-        $partition = $disk | New-Partition -UseMaximumSize
-        throwifnull $partition
-        $volume = $partition | Format-Volume -FileSystem NTFS -NewFileSystemLabel "disk_$name" -Confirm:$false
-        throwifnull $volume
-        mountvol $folder $volume.Path
-        Dismount-VHD $mounted.Path
-    }catch{
-        if ($mounted){Dismount-VHD $mounted.Path}
-        if (Test-Path $path){rm $path}
-        throw
-    }
-    `
-
-	log.Debugln("Attempting to create base vhdx named '", id, "'at'", folder, "'")
-	_, err := pshell.ExecutePowerShell(script)
-	return err
+func getParentVhdPath(vhdPath string) (string, error) {
+	return hcsshim.GetVhdParentPath(vhdPath)
 }
 
-func GetParentVhdPath(id string) (string, error) {
-	// This script will check a VHD for a parent VHD path.
-	// NOTE: the indentation must be spaces and not tabs, otherwise
-	// the powershell invocation will fail.
-	script := `
-    $vhdPath = "` + id + `"
-    if (!$vhdPath.EndsWith(".vhdx")){$vhdPath += ".vhdx"}
-    function throwifnull {
-        if ($args[0] -eq $null){
-            throw
-        }
-    }
-    $vhd = Get-VHD -Path $vhdPath
-    throwifnull $vhd
-    $vhd.ParentPath
-    `
-
-	log.Debugln("Attempting to get parent path of '", id, "'")
-	parentPath, err := pshell.ExecutePowerShell(script)
-	return parentPath, err
-}
-
-func CreateDiffVhd(id string, folder string, parent string) error {
+func createDiffVhd(id string, folder string, parent string) error {
 	newVhdPath := filepath.Join(filepath.Dir(folder), id) + ".vhdx"
 	parentVhdPath := parent + ".vhdx"
 
 	return hcsshim.CreateDiffVhd(newVhdPath, parentVhdPath)
 }
 
-func MountVhd(path string) (string, error) {
+func mountVhd(path string) (string, error) {
 	vhdPath := path + ".vhdx"
 
-	return hcsshim.MountVhd(vhdPath)
+	if err := hcsshim.MountVhd(vhdPath); err != nil {
+		return "", err
+	}
+
+	volPath, err := hcsshim.GetVhdVolumePath(vhdPath)
+	if err != nil {
+		if err2 := hcsshim.DismountVhd(vhdPath); err2 != nil {
+			log.Errorf("Failed to dismount disk '%s': %s", vhdPath, err2.Error())
+		}
+		return "", err
+	}
+
+	return volPath, nil
 }
 
-func DismountVhd(path string) error {
+func dismountVhd(path string) error {
 	vhdPath := path + ".vhdx"
 
 	return hcsshim.DismountVhd(vhdPath)
 }
 
-func GetMountedVolumePath(path string) (string, error) {
+func getMountedVolumePath(path string) (string, error) {
 	vhdPath := path + ".vhdx"
 
 	return hcsshim.GetVhdVolumePath(vhdPath)
 }
 
-func CopyVhd(src, dst string) error {
+func copyVhd(src, dst string) error {
 	srcPath := src + ".vhdx"
 	dstPath := dst + ".vhdx"
 

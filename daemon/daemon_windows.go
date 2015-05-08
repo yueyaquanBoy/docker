@@ -143,12 +143,8 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 		return nil, err
 	}
 
-	volumesDriver, err := graphdriver.GetDriver("windows", config.Root, config.GraphOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	volumes, err := volumes.NewRepository(filepath.Join(config.Root, "volumes"), volumesDriver)
+	// Use the same graph driver from storage for volumes.
+	volumes, err := volumes.NewRepository(filepath.Join(config.Root, "volumes"), driver)
 	if err != nil {
 		return nil, err
 	}
