@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -24,18 +23,15 @@ func init() {
 	graphdriver.Register("windowsfilter", InitFilter)
 }
 
-type driverType int
-
 const (
-	diffDriver driverType = iota
+	diffDriver = iota
 	filterDriver
 )
 
 type WindowsGraphDriver struct {
-	home       string
+	info       hcsshim.DriverInfo
 	sync.Mutex // Protects concurrent modification to active
 	active     map[string]int
-	flavor     driverType
 }
 
 // New returns a new WINDOWS Diff Disk driver.
@@ -43,9 +39,11 @@ func InitDiff(home string, options []string) (graphdriver.Driver, error) {
 	log.Debugln("WindowsGraphDriver InitDiff() home", home)
 
 	d := &WindowsGraphDriver{
-		home:   home,
+		info: hcsshim.DriverInfo{
+			HomeDir: home,
+			Flavor:  diffDriver,
+		},
 		active: make(map[string]int),
-		flavor: diffDriver,
 	}
 
 	return d, nil
@@ -56,9 +54,11 @@ func InitFilter(home string, options []string) (graphdriver.Driver, error) {
 	log.Debugln("WindowsGraphDriver InitFilter() home", home)
 
 	d := &WindowsGraphDriver{
-		home:   home,
+		info: hcsshim.DriverInfo{
+			HomeDir: home,
+			Flavor:  filterDriver,
+		},
 		active: make(map[string]int),
-		flavor: filterDriver,
 	}
 
 	return d, nil
@@ -66,7 +66,7 @@ func InitFilter(home string, options []string) (graphdriver.Driver, error) {
 
 func (d *WindowsGraphDriver) String() string {
 	log.Debugln("WindowsGraphDriver String()")
-	switch d.flavor {
+	switch d.info.Flavor {
 	case diffDriver:
 		return "windows"
 	case filterDriver:
@@ -86,17 +86,13 @@ func (d *WindowsGraphDriver) Status() [][2]string {
 // Exists returns true if the given id is registered with
 // this driver
 func (d *WindowsGraphDriver) Exists(id string) bool {
-	info, err := d.info()
-	if err != nil {
-		log.Errorf("Unable to get driver info: %s", err.Error())
-		return false
-	}
-
-	result, err := hcsshim.LayerExists(info, id)
+	result, err := hcsshim.LayerExists(d.info, id)
 	if err != nil {
 		log.Errorf("LayerExists call failed: %s", err.Error())
 		return false
 	}
+
+	log.Infoln("Exist result:", result)
 
 	return result
 }
@@ -113,7 +109,7 @@ func (d *WindowsGraphDriver) Create(id, parent string) error {
 		return err
 	}
 
-	if d.flavor == diffDriver {
+	if d.info.Flavor == diffDriver {
 		if parent == "" {
 			// This is a base layer, so create a new VHD.
 			return createBaseVhd(id, dir)
@@ -130,20 +126,7 @@ func (d *WindowsGraphDriver) Create(id, parent string) error {
 }
 
 func (d *WindowsGraphDriver) dir(id string) string {
-	return filepath.Join(d.home, filepath.Base(id))
-}
-
-func (d *WindowsGraphDriver) info() (hcsshim.DriverInfo, error) {
-	homedirp, err := syscall.UTF16PtrFromString(d.home)
-	if err != nil {
-		log.Debugln("Failed conversion of home to pointer ", err)
-		return hcsshim.DriverInfo{}, err
-	}
-
-	return hcsshim.DriverInfo{
-		Flavor:   int(d.flavor),
-		HomeDirp: homedirp,
-	}, nil
+	return filepath.Join(d.info.HomeDir, filepath.Base(id))
 }
 
 // Unmount and remove the dir information
@@ -159,7 +142,7 @@ func (d *WindowsGraphDriver) Remove(id string) error {
 		log.Warnf("Removing active id %s", id)
 	}
 
-	if d.flavor == diffDriver {
+	if d.info.Flavor == diffDriver {
 		if d.active[id] > 0 {
 			if err := dismountVhd(dir); err != nil {
 				return err
@@ -189,7 +172,7 @@ func (d *WindowsGraphDriver) Get(id, mountLabel string) (string, error) {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.flavor == diffDriver {
+	if d.info.Flavor == diffDriver {
 		if d.active[id] == 0 {
 			dir, err = mountVhd(dir)
 		} else {
@@ -216,7 +199,7 @@ func (d *WindowsGraphDriver) Put(id string) error {
 	if d.active[id] > 1 {
 		d.active[id]--
 	} else if d.active[id] == 1 {
-		if d.flavor == diffDriver {
+		if d.info.Flavor == diffDriver {
 			if err := dismountVhd(dir); err != nil {
 				return err
 			}
@@ -236,7 +219,7 @@ func (d *WindowsGraphDriver) Cleanup() error {
 // layer and its parent layer which may be "".
 func (d *WindowsGraphDriver) Diff(id, parent string) (arch archive.Archive, err error) {
 	// Always include the diff disk for the given layer.
-	if d.flavor == diffDriver {
+	if d.info.Flavor == diffDriver {
 		diffFiles := []string{id + ".vhdx"}
 		prevLayer := d.dir(parent)
 		curParent, err := getParentVhdPath(d.dir(id) + ".vhdx")
@@ -258,7 +241,7 @@ func (d *WindowsGraphDriver) Diff(id, parent string) (arch archive.Archive, err 
 			IncludeFiles: diffFiles,
 		}
 
-		arch, err = archive.TarWithOptions(d.home, opts)
+		arch, err = archive.TarWithOptions(d.info.HomeDir, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -298,7 +281,7 @@ func (d *WindowsGraphDriver) ApplyDiff(id, parent string, diff archive.ArchiveRe
 	log.Debugf("Start untar layer")
 
 	destination := d.dir(id)
-	if d.flavor == diffDriver {
+	if d.info.Flavor == diffDriver {
 		destination = filepath.Dir(destination)
 	}
 
@@ -332,7 +315,7 @@ func (d *WindowsGraphDriver) CopyDiff(sourceId, id string) error {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.flavor == diffDriver {
+	if d.info.Flavor == diffDriver {
 		if d.active[sourceId] != 0 {
 			log.Warnf("Committing active id %s", id)
 			err := dismountVhd(d.dir(sourceId))

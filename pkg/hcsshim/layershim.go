@@ -30,8 +30,26 @@ struct DriverInfo {
 };
 */
 type DriverInfo struct {
+	Flavor  int
+	HomeDir string
+}
+
+type driverInfo struct {
 	Flavor   int
 	HomeDirp *uint16
+}
+
+func convertInfo(info DriverInfo) (driverInfo, error) {
+	homedirp, err := syscall.UTF16PtrFromString(info.HomeDir)
+	if err != nil {
+		log.Debugln("Failed conversion of home to pointer for driver info: ", err.Error())
+		return driverInfo{}, err
+	}
+
+	return driverInfo{
+		Flavor:   info.Flavor,
+		HomeDirp: homedirp,
+	}, nil
 }
 
 func LayerExists(info DriverInfo, id string) (bool, error) {
@@ -45,13 +63,20 @@ func LayerExists(info DriverInfo, id string) (bool, error) {
 		return false, err
 	}
 
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return false, err
+	}
+
 	var exists bool
 
 	// Call the procedure itself.
 	r1, _, _ := procLayerExists.Call(
-		uintptr(unsafe.Pointer(&info)),
+		uintptr(unsafe.Pointer(&infop)),
 		uintptr(unsafe.Pointer(idp)),
 		uintptr(unsafe.Pointer(&exists)))
+	use(unsafe.Pointer(&infop))
 	use(unsafe.Pointer(idp))
 
 	if r1 != 0 {
