@@ -4,7 +4,6 @@ package windows
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -15,6 +14,7 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
 	"github.com/docker/docker/pkg/hcsshim"
+	"github.com/docker/docker/pkg/ioutils"
 )
 
 func init() {
@@ -177,16 +177,16 @@ func (d *WindowsGraphDriver) Diff(id, parent string) (arch archive.Archive, err 
 	if d.info.Flavor == diffDriver {
 		diffFiles := []string{id + ".vhdx"}
 		prevLayer := d.dir(parent)
-		curParent, err := getParentVhdPath(d.dir(id) + ".vhdx")
+		curParent, err := hcsshim.GetVhdParentPath(d.dir(id) + ".vhdx")
 		if err != nil {
 			return nil, err
 		}
-		for strings.EqualFold((prevLayer + ".vhdx"), curParent) {
+		for strings.EqualFold((prevLayer+".vhdx"), curParent) && curParent != "" {
 			log.Debugf("Parent %s does not match parent %s.", (prevLayer + ".vhdx"), curParent)
 			// Add that diff to the list of files.
 			_, diffFile := filepath.Split(curParent)
 			diffFiles = append(diffFiles, diffFile)
-			curParent, err = getParentVhdPath(curParent)
+			curParent, err = hcsshim.GetVhdParentPath(curParent)
 			if err != nil {
 				return nil, err
 			}
@@ -201,8 +201,54 @@ func (d *WindowsGraphDriver) Diff(id, parent string) (arch archive.Archive, err 
 			return nil, err
 		}
 		return arch, nil
+	} else if d.info.Flavor == filterDriver {
+		// Perform a
+		layerFs, err := d.Get(id, "")
+		if err != nil {
+			return nil, err
+		}
+
+		defer func() {
+			if err != nil {
+				d.Put(id)
+			}
+		}()
+
+		if parent == "" {
+			archive, err := archive.Tar(layerFs, archive.Uncompressed)
+			if err != nil {
+				return nil, err
+			}
+			return ioutils.NewReadCloserWrapper(archive, func() error {
+				err := archive.Close()
+				d.Put(id)
+				return err
+			}), nil
+		}
+
+		parentFs, err := d.Get(parent, "")
+		if err != nil {
+			return nil, err
+		}
+		defer d.Put(parent)
+
+		changes, err := archive.ChangesDirs(layerFs, parentFs)
+		if err != nil {
+			return nil, err
+		}
+
+		archive, err := archive.ExportChanges(layerFs, changes)
+		if err != nil {
+			return nil, err
+		}
+
+		return ioutils.NewReadCloserWrapper(archive, func() error {
+			err := archive.Close()
+			d.Put(id)
+			return err
+		}), nil
 	} else {
-		return nil, fmt.Errorf("Windows Filter Driver: Not Implemented")
+		return nil, fmt.Errorf("Unknown Windows driver flavor: %d", d.info.Flavor)
 	}
 }
 
@@ -270,62 +316,18 @@ func (d *WindowsGraphDriver) CopyDiff(sourceId, id string) error {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.info.Flavor == diffDriver {
-		if d.active[sourceId] != 0 {
-			log.Warnf("Committing active id %s", id)
-			err := dismountVhd(d.dir(sourceId))
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_, err := mountVhd(d.dir(sourceId))
-				if err != nil {
-					log.Warnf("Failed to remount VHD: %s", err)
-				}
-			}()
-		}
-
-		if err := os.Mkdir(d.dir(id), 0755); err != nil {
+	if d.active[sourceId] != 0 {
+		log.Warnf("Committing active id %s", sourceId)
+		if err := hcsshim.DeactivateLayer(d.info, sourceId); err != nil {
 			return err
 		}
-
-		return copyVhd(d.dir(sourceId), d.dir(id))
-	} else {
-		return fmt.Errorf("Windows Filter Driver: Not Implemented")
-	}
-}
-
-func getParentVhdPath(vhdPath string) (string, error) {
-	return hcsshim.GetVhdParentPath(vhdPath)
-}
-
-func mountVhd(path string) (string, error) {
-	vhdPath := path + ".vhdx"
-
-	if err := hcsshim.MountVhd(vhdPath); err != nil {
-		return "", err
+		defer func() {
+			err := hcsshim.ActivateLayer(d.info, sourceId)
+			if err != nil {
+				log.Warnf("Failed to activate %s: %s", sourceId, err)
+			}
+		}()
 	}
 
-	volPath, err := hcsshim.GetVhdVolumePath(vhdPath)
-	if err != nil {
-		if err2 := hcsshim.DismountVhd(vhdPath); err2 != nil {
-			log.Errorf("Failed to dismount disk '%s': %s", vhdPath, err2.Error())
-		}
-		return "", err
-	}
-
-	return volPath, nil
-}
-
-func dismountVhd(path string) error {
-	vhdPath := path + ".vhdx"
-
-	return hcsshim.DismountVhd(vhdPath)
-}
-
-func copyVhd(src, dst string) error {
-	srcPath := src + ".vhdx"
-	dstPath := dst + ".vhdx"
-
-	return chrootarchive.CopyFileWithTar(srcPath, dstPath)
+	return hcsshim.CopyLayer(d.info, sourceId, id)
 }

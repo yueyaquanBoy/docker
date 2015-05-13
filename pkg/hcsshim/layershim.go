@@ -20,6 +20,7 @@ var (
 	procActivateLayer     = modvmcompute.NewProc("ActivateLayer")
 	procDeactivateLayer   = modvmcompute.NewProc("DeactivateLayer")
 	procGetLayerMountPath = modvmcompute.NewProc("GetLayerMountPath")
+	procCopyLayer         = modvmcompute.NewProc("CopyLayer")
 )
 
 /* To pass into syscall, we need a struct matching the following:
@@ -256,4 +257,44 @@ func GetLayerMountPath(info DriverInfo, id string) (string, error) {
 	}
 
 	return syscall.UTF16ToString(mountPathp[0:]), nil
+}
+
+func CopyLayer(info DriverInfo, srcId, dstId string) error {
+	log.Debugln("hcsshim::CopyLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("srcId:", srcId)
+	log.Debugln("dstId:", dstId)
+
+	srcIdp, err := syscall.UTF16PtrFromString(srcId)
+	if err != nil {
+		log.Debugln("Failed conversion of srcId to pointer ", err)
+		return err
+	}
+
+	dstIdp, err := syscall.UTF16PtrFromString(dstId)
+	if err != nil {
+		log.Debugln("Failed conversion of dstId to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procCopyLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(srcIdp)),
+		uintptr(unsafe.Pointer(dstIdp)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(srcIdp))
+	use(unsafe.Pointer(dstIdp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
 }
