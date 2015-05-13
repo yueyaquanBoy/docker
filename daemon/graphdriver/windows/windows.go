@@ -15,7 +15,6 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
 	"github.com/docker/docker/pkg/hcsshim"
-	"github.com/docker/docker/pkg/system"
 )
 
 func init() {
@@ -100,29 +99,7 @@ func (d *WindowsGraphDriver) Exists(id string) bool {
 func (d *WindowsGraphDriver) Create(id, parent string) error {
 	log.Debugln("WindowsGraphDriver Create() id:", id, ", parent:", parent)
 
-	dir := d.dir(id)
-	log.Debugln("dir=", dir)
-	if err := system.MkdirAll(filepath.Dir(dir), 0700); err != nil {
-		return err
-	}
-	if err := os.Mkdir(dir, 0755); err != nil {
-		return err
-	}
-
-	if d.info.Flavor == diffDriver {
-		if parent == "" {
-			// This is a base layer, so create a new VHD.
-			return createBaseVhd(id, dir)
-		} else {
-			// This is an intermediate layer, so create a diff-VHD from
-			// the parent.
-			parentDir := d.dir(parent)
-			log.Debugln("parentDir=", parentDir)
-			return createDiffVhd(id, dir, parentDir)
-		}
-	}
-
-	return nil
+	return hcsshim.CreateLayer(d.info, id, parent)
 }
 
 func (d *WindowsGraphDriver) dir(id string) string {
@@ -133,27 +110,7 @@ func (d *WindowsGraphDriver) dir(id string) string {
 func (d *WindowsGraphDriver) Remove(id string) error {
 	log.Debugln("WindowsGraphDriver Remove()", id)
 
-	dir := d.dir(id)
-
-	d.Lock()
-	defer d.Unlock()
-
-	if d.active[id] != 0 {
-		log.Warnf("Removing active id %s", id)
-	}
-
-	if d.info.Flavor == diffDriver {
-		if d.active[id] > 0 {
-			if err := dismountVhd(dir); err != nil {
-				return err
-			}
-		}
-		if err := os.Remove(dir + ".vhdx"); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-
-	return os.RemoveAll(dir)
+	return hcsshim.DestroyLayer(d.info, id)
 }
 
 // Return the rootfs path for the id
@@ -161,26 +118,28 @@ func (d *WindowsGraphDriver) Remove(id string) error {
 func (d *WindowsGraphDriver) Get(id, mountLabel string) (string, error) {
 	log.Debugln("WindowsGraphDriver Get() id:", id, ", mountLabel:", mountLabel)
 
-	dir := d.dir(id)
-	st, err := system.Lstat(dir)
-	if err != nil {
-		return "", err
-	} else if !st.IsDir() {
-		return "", fmt.Errorf("%s: not a directory", dir)
-	}
+	var dir string
 
 	d.Lock()
 	defer d.Unlock()
 
-	if d.info.Flavor == diffDriver {
-		if d.active[id] == 0 {
-			dir, err = mountVhd(dir)
-		} else {
-			dir, err = getMountedVolumePath(dir)
-		}
-		if err != nil {
+	if d.active[id] == 0 {
+		if err := hcsshim.ActivateLayer(d.info, id); err != nil {
 			return "", err
 		}
+	}
+
+	mountPath, err := hcsshim.GetLayerMountPath(d.info, id)
+	if err != nil {
+		return "", err
+	}
+
+	// If the layer has a mount path, use that. Otherwise, use the
+	// folder path.
+	if mountPath != "" {
+		dir = mountPath
+	} else {
+		dir = d.dir(id)
 	}
 
 	d.active[id]++
@@ -191,18 +150,14 @@ func (d *WindowsGraphDriver) Get(id, mountLabel string) (string, error) {
 func (d *WindowsGraphDriver) Put(id string) error {
 	log.Debugln("WindowsGraphDriver Put() id:", id)
 
-	dir := d.dir(id)
-
 	d.Lock()
 	defer d.Unlock()
 
 	if d.active[id] > 1 {
 		d.active[id]--
 	} else if d.active[id] == 1 {
-		if d.info.Flavor == diffDriver {
-			if err := dismountVhd(dir); err != nil {
-				return err
-			}
+		if err := hcsshim.DeactivateLayer(d.info, id); err != nil {
+			return err
 		}
 		delete(d.active, id)
 	}
@@ -340,25 +295,8 @@ func (d *WindowsGraphDriver) CopyDiff(sourceId, id string) error {
 	}
 }
 
-func createBaseVhd(id string, folder string) error {
-	newVhdPath := filepath.Join(filepath.Dir(folder), id) + ".vhdx"
-
-	if err := hcsshim.CreateBaseVhd(newVhdPath, 20); err != nil {
-		return err
-	}
-
-	return hcsshim.FormatVhd(newVhdPath)
-}
-
 func getParentVhdPath(vhdPath string) (string, error) {
 	return hcsshim.GetVhdParentPath(vhdPath)
-}
-
-func createDiffVhd(id string, folder string, parent string) error {
-	newVhdPath := filepath.Join(filepath.Dir(folder), id) + ".vhdx"
-	parentVhdPath := parent + ".vhdx"
-
-	return hcsshim.CreateDiffVhd(newVhdPath, parentVhdPath)
 }
 
 func mountVhd(path string) (string, error) {
@@ -383,12 +321,6 @@ func dismountVhd(path string) error {
 	vhdPath := path + ".vhdx"
 
 	return hcsshim.DismountVhd(vhdPath)
-}
-
-func getMountedVolumePath(path string) (string, error) {
-	vhdPath := path + ".vhdx"
-
-	return hcsshim.GetVhdVolumePath(vhdPath)
 }
 
 func copyVhd(src, dst string) error {

@@ -14,7 +14,12 @@ import (
 )
 
 var (
-	procLayerExists = modvmcompute.NewProc("LayerExists")
+	procLayerExists       = modvmcompute.NewProc("LayerExists")
+	procCreateLayer       = modvmcompute.NewProc("CreateLayer")
+	procDestroyLayer      = modvmcompute.NewProc("DestroyLayer")
+	procActivateLayer     = modvmcompute.NewProc("ActivateLayer")
+	procDeactivateLayer   = modvmcompute.NewProc("DeactivateLayer")
+	procGetLayerMountPath = modvmcompute.NewProc("GetLayerMountPath")
 )
 
 /* To pass into syscall, we need a struct matching the following:
@@ -84,4 +89,171 @@ func LayerExists(info DriverInfo, id string) (bool, error) {
 	}
 
 	return exists, nil
+}
+
+func CreateLayer(info DriverInfo, id, parent string) error {
+	log.Debugln("hcsshim::CreateLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("id:", id)
+	log.Debugln("parent:", parent)
+
+	idp, err := syscall.UTF16PtrFromString(id)
+	if err != nil {
+		log.Debugln("Failed conversion of id to pointer ", err)
+		return err
+	}
+
+	parentp, err := syscall.UTF16PtrFromString(parent)
+	if err != nil {
+		log.Debugln("Failed conversion of parent to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procCreateLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(idp)),
+		uintptr(unsafe.Pointer(parentp)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(idp))
+	use(unsafe.Pointer(parentp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func DestroyLayer(info DriverInfo, id string) error {
+	log.Debugln("hcsshim::DestroyLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("id:", id)
+
+	idp, err := syscall.UTF16PtrFromString(id)
+	if err != nil {
+		log.Debugln("Failed conversion of id to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procDestroyLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(idp)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(idp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func ActivateLayer(info DriverInfo, id string) error {
+	log.Debugln("hcsshim::ActivateLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("id:", id)
+
+	idp, err := syscall.UTF16PtrFromString(id)
+	if err != nil {
+		log.Debugln("Failed conversion of id to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procActivateLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(idp)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(idp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func DeactivateLayer(info DriverInfo, id string) error {
+	log.Debugln("hcsshim::DeactivateLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("id:", id)
+
+	idp, err := syscall.UTF16PtrFromString(id)
+	if err != nil {
+		log.Debugln("Failed conversion of id to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procDeactivateLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(idp)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(idp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func GetLayerMountPath(info DriverInfo, id string) (string, error) {
+	log.Debugln("hcsshim::GetLayerMountPath")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("id:", id)
+
+	idp, err := syscall.UTF16PtrFromString(id)
+	if err != nil {
+		log.Debugln("Failed conversion of id to pointer ", err)
+		return "", err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return "", err
+	}
+
+	var mountPathp [256]uint16
+	mountPathp[0] = 0
+
+	r1, _, _ := procGetLayerMountPath.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(idp)),
+		uintptr(unsafe.Pointer(&mountPathp)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(idp))
+
+	if r1 != 0 {
+		return "", syscall.Errno(r1)
+	}
+
+	return syscall.UTF16ToString(mountPathp[0:]), nil
 }
