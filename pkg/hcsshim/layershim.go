@@ -259,11 +259,17 @@ func GetLayerMountPath(info DriverInfo, id string) (string, error) {
 	return syscall.UTF16ToString(mountPathp[0:]), nil
 }
 
-func CopyLayer(info DriverInfo, srcId, dstId string) error {
+func CopyLayer(info DriverInfo, srcId, dstId string, parentLayerPaths []string) error {
 	log.Debugln("hcsshim::CopyLayer")
 	log.Debugln("info.Flavor:", info.Flavor)
 	log.Debugln("srcId:", srcId)
 	log.Debugln("dstId:", dstId)
+
+	layers, err := LayerPathsToDescriptors(parentLayerPaths)
+	if err != nil {
+		log.Debugln("Failed to generate layer descriptors ", err)
+		return err
+	}
 
 	srcIdp, err := syscall.UTF16PtrFromString(srcId)
 	if err != nil {
@@ -283,14 +289,24 @@ func CopyLayer(info DriverInfo, srcId, dstId string) error {
 		return err
 	}
 
+	var layerDescriptorsp *WC_LAYER_DESCRIPTOR
+	if len(layers) > 0 {
+		layerDescriptorsp = &(layers[0])
+	} else {
+		layerDescriptorsp = nil
+	}
+
 	// Call the procedure itself.
 	r1, _, _ := procCopyLayer.Call(
 		uintptr(unsafe.Pointer(&infop)),
 		uintptr(unsafe.Pointer(srcIdp)),
-		uintptr(unsafe.Pointer(dstIdp)))
+		uintptr(unsafe.Pointer(dstIdp)),
+		uintptr(unsafe.Pointer(layerDescriptorsp)),
+		uintptr(len(layers)))
 	use(unsafe.Pointer(&infop))
 	use(unsafe.Pointer(srcIdp))
 	use(unsafe.Pointer(dstIdp))
+	use(unsafe.Pointer(layerDescriptorsp))
 
 	if r1 != 0 {
 		return syscall.Errno(r1)

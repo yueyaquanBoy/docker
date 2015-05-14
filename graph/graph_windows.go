@@ -53,38 +53,40 @@ func (graph *Graph) Register(img *image.Image, layerData archive.ArchiveReader) 
 	// (FIXME: make that mandatory for drivers).
 	graph.driver.Remove(img.ID)
 
+	tmp, err := graph.Mktemp("")
+	defer os.RemoveAll(tmp)
+	if err != nil {
+		return fmt.Errorf("Mktemp failed: %s", err)
+	}
+
 	if wd, ok := graph.driver.(*windows.WindowsGraphDriver); ok && img.Container != "" && layerData == nil {
 		log.Debugf("Copying from container %s.", img.Container)
 
-		if err := wd.CopyDiff(img.Container, img.ID); err != nil {
+		ids, err := graph.ParentLayerIds(img)
+		if err != nil {
+			return err
+		}
+
+		if err := wd.CopyDiff(img.Container, img.ID, wd.LayerIdsToPaths(ids)); err != nil {
 			return fmt.Errorf("Driver %s failed to copy image rootfs %s: %s", graph.driver, img.Container, err)
 		}
-
-		return nil
 	} else {
-		// Support for windows dummy graph driver.
-		tmp, err := graph.Mktemp("")
-		defer os.RemoveAll(tmp)
-		if err != nil {
-			return fmt.Errorf("Mktemp failed: %s", err)
-		}
-
 		// Create root filesystem in the driver
 		if err := graph.driver.Create(img.ID, img.Parent); err != nil {
 			return fmt.Errorf("Driver %s failed to create image rootfs %s: %s", graph.driver, img.ID, err)
 		}
-
-		// Apply the diff/layer
-		img.SetGraph(graph)
-		if err := image.StoreImage(img, layerData, tmp); err != nil {
-			return err
-		}
-
-		// Commit
-		if err := os.Rename(tmp, graph.ImageRoot(img.ID)); err != nil {
-			return err
-		}
-		graph.idIndex.Add(img.ID)
-		return nil
 	}
+
+	// Apply the diff/layer
+	img.SetGraph(graph)
+	if err := image.StoreImage(img, layerData, tmp); err != nil {
+		return err
+	}
+
+	// Commit
+	if err := os.Rename(tmp, graph.ImageRoot(img.ID)); err != nil {
+		return err
+	}
+	graph.idIndex.Add(img.ID)
+	return nil
 }

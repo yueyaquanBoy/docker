@@ -55,6 +55,31 @@ type WC_LAYER_DESCRIPTOR struct {
 	Pathp   *uint16
 }
 
+func LayerPathsToDescriptors(parentLayerPaths []string) ([]WC_LAYER_DESCRIPTOR, error) {
+	// Array of descriptors that gets constructed.
+	var layers []WC_LAYER_DESCRIPTOR
+
+	for i := 0; i < len(parentLayerPaths); i++ {
+		// Create a layer descriptor, using the folder path
+		// as the source for a GUID LayerId
+		g := guid.NewGuid(parentLayerPaths[i])
+
+		p, err := syscall.UTF16PtrFromString(parentLayerPaths[i])
+		if err != nil {
+			log.Debugln("Failed conversion of parentLayerPath to pointer ", err)
+			return nil, err
+		}
+
+		layers = append(layers, WC_LAYER_DESCRIPTOR{
+			LayerId: *g,
+			Flags:   0,
+			Pathp:   p,
+		})
+	}
+
+	return layers, nil
+}
+
 func InitializeStorageSandbox(sandboxPath string, parentLayerPaths []string) error {
 	log.Debugln("hcsshim::InitializeStorageSandbox")
 	log.Debugln("sandboxPath:", sandboxPath)

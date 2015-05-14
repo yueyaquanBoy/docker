@@ -4,11 +4,14 @@ package graphdriver
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/pkg/hcsshim"
 )
 
 type WindowsGraphDriver interface {
 	Driver
-	CopyDiff(id, sourceId string) error
+	CopyDiff(id, sourceId string, parentLayerPaths []string) error
+	LayerIdsToPaths(ids []string) []string
+	Info() hcsshim.DriverInfo
 }
 
 const (

@@ -63,6 +63,10 @@ func InitFilter(home string, options []string) (graphdriver.Driver, error) {
 	return d, nil
 }
 
+func (d *WindowsGraphDriver) Info() hcsshim.DriverInfo {
+	return d.info
+}
+
 func (d *WindowsGraphDriver) String() string {
 	log.Debugln("WindowsGraphDriver String()")
 	switch d.info.Flavor {
@@ -202,7 +206,7 @@ func (d *WindowsGraphDriver) Diff(id, parent string) (arch archive.Archive, err 
 		}
 		return arch, nil
 	} else if d.info.Flavor == filterDriver {
-		// Perform a
+		// Perform a naive diff
 		layerFs, err := d.Get(id, "")
 		if err != nil {
 			return nil, err
@@ -312,11 +316,11 @@ func (d *WindowsGraphDriver) DiffSize(id, parent string) (size int64, err error)
 	return archive.ChangesSize(layerFs, changes), nil
 }
 
-func (d *WindowsGraphDriver) CopyDiff(sourceId, id string) error {
+func (d *WindowsGraphDriver) CopyDiff(sourceId, id string, parentLayerPaths []string) error {
 	d.Lock()
 	defer d.Unlock()
 
-	if d.active[sourceId] != 0 {
+	if d.info.Flavor == diffDriver && d.active[sourceId] != 0 {
 		log.Warnf("Committing active id %s", sourceId)
 		if err := hcsshim.DeactivateLayer(d.info, sourceId); err != nil {
 			return err
@@ -329,5 +333,13 @@ func (d *WindowsGraphDriver) CopyDiff(sourceId, id string) error {
 		}()
 	}
 
-	return hcsshim.CopyLayer(d.info, sourceId, id)
+	return hcsshim.CopyLayer(d.info, sourceId, id, parentLayerPaths)
+}
+
+func (d *WindowsGraphDriver) LayerIdsToPaths(ids []string) []string {
+	var paths []string
+	for _, id := range ids {
+		paths = append(paths, d.dir(id))
+	}
+	return paths
 }

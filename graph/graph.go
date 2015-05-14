@@ -307,6 +307,16 @@ func (graph *Graph) Heads() (map[string]*image.Image, error) {
 	return heads, err
 }
 
+// ParentLayerIds returns a list of all parent image IDs for the given image.
+func (graph *Graph) ParentLayerIds(img *image.Image) (ids []string, err error) {
+	i := img
+	for i, err := i.GetParent(); i != nil && err != nil; {
+		ids = append(ids, i.ID)
+	}
+
+	return
+}
+
 func (graph *Graph) ImageRoot(id string) string {
 	return filepath.Join(graph.Root, id)
 }
