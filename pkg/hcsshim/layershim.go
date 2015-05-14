@@ -14,13 +14,14 @@ import (
 )
 
 var (
-	procLayerExists       = modvmcompute.NewProc("LayerExists")
-	procCreateLayer       = modvmcompute.NewProc("CreateLayer")
-	procDestroyLayer      = modvmcompute.NewProc("DestroyLayer")
-	procActivateLayer     = modvmcompute.NewProc("ActivateLayer")
-	procDeactivateLayer   = modvmcompute.NewProc("DeactivateLayer")
-	procGetLayerMountPath = modvmcompute.NewProc("GetLayerMountPath")
-	procCopyLayer         = modvmcompute.NewProc("CopyLayer")
+	procLayerExists        = modvmcompute.NewProc("LayerExists")
+	procCreateLayer        = modvmcompute.NewProc("CreateLayer")
+	procDestroyLayer       = modvmcompute.NewProc("DestroyLayer")
+	procActivateLayer      = modvmcompute.NewProc("ActivateLayer")
+	procDeactivateLayer    = modvmcompute.NewProc("DeactivateLayer")
+	procGetLayerMountPath  = modvmcompute.NewProc("GetLayerMountPath")
+	procCopyLayer          = modvmcompute.NewProc("CopyLayer")
+	procCreateSandboxLayer = modvmcompute.NewProc("CreateSandboxLayer")
 )
 
 /* To pass into syscall, we need a struct matching the following:
@@ -56,6 +57,66 @@ func convertInfo(info DriverInfo) (driverInfo, error) {
 		Flavor:   info.Flavor,
 		HomeDirp: homedirp,
 	}, nil
+}
+
+/* To pass into syscall, we need a struct matching the following:
+typedef struct _WC_LAYER_DESCRIPTOR {
+
+    //
+    // The ID of the layer
+    //
+
+    GUID LayerId;
+
+    //
+    // Additional flags
+    //
+
+    union {
+        struct {
+            ULONG Reserved : 31;
+            ULONG Dirty : 1;    // Created from sandbox as a result of snapshot
+        };
+        ULONG Value;
+    } Flags;
+
+    //
+    // Path to the layer root directory, null-terminated
+    //
+
+    PCWSTR Path;
+
+} WC_LAYER_DESCRIPTOR, *PWC_LAYER_DESCRIPTOR;
+*/
+type WC_LAYER_DESCRIPTOR struct {
+	LayerId guid.Guid
+	Flags   uint32
+	Pathp   *uint16
+}
+
+func LayerPathsToDescriptors(parentLayerPaths []string) ([]WC_LAYER_DESCRIPTOR, error) {
+	// Array of descriptors that gets constructed.
+	var layers []WC_LAYER_DESCRIPTOR
+
+	for i := 0; i < len(parentLayerPaths); i++ {
+		// Create a layer descriptor, using the folder path
+		// as the source for a GUID LayerId
+		g := guid.NewGuid(parentLayerPaths[i])
+
+		p, err := syscall.UTF16PtrFromString(parentLayerPaths[i])
+		if err != nil {
+			log.Debugln("Failed conversion of parentLayerPath to pointer ", err)
+			return nil, err
+		}
+
+		layers = append(layers, WC_LAYER_DESCRIPTOR{
+			LayerId: *g,
+			Flags:   0,
+			Pathp:   p,
+		})
+	}
+
+	return layers, nil
 }
 
 func LayerExists(info DriverInfo, id string) (bool, error) {
@@ -306,6 +367,61 @@ func CopyLayer(info DriverInfo, srcId, dstId string, parentLayerPaths []string) 
 	use(unsafe.Pointer(&infop))
 	use(unsafe.Pointer(srcIdp))
 	use(unsafe.Pointer(dstIdp))
+	use(unsafe.Pointer(layerDescriptorsp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func CreateSandboxLayer(info DriverInfo, layerId, parentId string, parentLayerPaths []string) error {
+	log.Debugln("hcsshim::CreateSandboxLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("layerId:", layerId)
+
+	layers, err := LayerPathsToDescriptors(parentLayerPaths)
+	if err != nil {
+		log.Debugln("Failed to generate layer descriptors ", err)
+		return err
+	}
+
+	layerIdp, err := syscall.UTF16PtrFromString(layerId)
+	if err != nil {
+		log.Debugln("Failed conversion of layerId to pointer ", err)
+		return err
+	}
+
+	parentIdp, err := syscall.UTF16PtrFromString(parentId)
+	if err != nil {
+		log.Debugln("Failed conversion of parentId to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	var layerDescriptorsp *WC_LAYER_DESCRIPTOR
+	if len(layers) > 0 {
+		layerDescriptorsp = &(layers[0])
+	} else {
+		layerDescriptorsp = nil
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procCreateSandboxLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(layerIdp)),
+		uintptr(unsafe.Pointer(parentIdp)),
+		uintptr(unsafe.Pointer(layerDescriptorsp)),
+		uintptr(len(layers)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(layerIdp))
+	use(unsafe.Pointer(parentIdp))
 	use(unsafe.Pointer(layerDescriptorsp))
 
 	if r1 != 0 {

@@ -309,11 +309,9 @@ func (graph *Graph) Heads() (map[string]*image.Image, error) {
 
 // ParentLayerIds returns a list of all parent image IDs for the given image.
 func (graph *Graph) ParentLayerIds(img *image.Image) (ids []string, err error) {
-	i := img
-	for i, err := i.GetParent(); i != nil && err != nil; {
+	for i := img; i != nil && err == nil; i, err = i.GetParent() {
 		ids = append(ids, i.ID)
 	}
-
 	return
 }
 

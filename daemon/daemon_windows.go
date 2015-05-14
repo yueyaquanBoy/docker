@@ -16,12 +16,13 @@ import (
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/daemon/execdriver/execdrivers"
 	"github.com/docker/docker/daemon/graphdriver"
-	_ "github.com/docker/docker/daemon/graphdriver/windows"
+	"github.com/docker/docker/daemon/graphdriver/windows"
 	_ "github.com/docker/docker/daemon/graphdriver/windummy"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/graph"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/graphdb"
+	"github.com/docker/docker/pkg/hcsshim"
 	"github.com/docker/docker/pkg/sysinfo"
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/pkg/truncindex"
@@ -44,8 +45,29 @@ func (daemon *Daemon) createRootfs(container *Container) error {
 	if err := os.Mkdir(container.root, 0700); err != nil {
 		return err
 	}
-	if err := daemon.driver.Create(container.ID, container.ImageID); err != nil {
-		return err
+
+	if wd, ok := daemon.driver.(*windows.WindowsGraphDriver); ok {
+		// Get list of paths to parent layers.
+		log.Debugln("Container has parent image:", container.ImageID)
+		img, err := daemon.graph.Get(container.ImageID)
+		if err != nil {
+			return err
+		}
+
+		ids, err := daemon.graph.ParentLayerIds(img)
+		if err != nil {
+			return err
+		}
+		log.Debugln("Got image ids:", len(ids))
+
+		if err := hcsshim.CreateSandboxLayer(wd.Info(), container.ID, container.ImageID, wd.LayerIdsToPaths(ids)); err != nil {
+			return err
+		}
+	} else {
+		// Hanlding for the dummy driver.
+		if err := daemon.driver.Create(container.ID, container.ImageID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
