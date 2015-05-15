@@ -9,6 +9,13 @@ daemonSupporting=(
 	[linux/amd64]=1
 )
 
+# explicit list of os/arch combos that support being compiled as a
+# daemon, but are not yet functional
+declare -A daemonCompiling
+daemonCompiling=(
+	[windows/amd64]=1
+)
+
 # if we have our linux/amd64 version compiled, let's symlink it in
 if [ -x "$DEST/../binary/docker-$VERSION" ]; then
 	mkdir -p "$DEST/linux/amd64"
@@ -18,6 +25,19 @@ if [ -x "$DEST/../binary/docker-$VERSION" ]; then
 	)
 	echo "Created symlinks:" "$DEST/linux/amd64/"*
 fi
+
+# Verify compilation of the daemon on supported platforms 
+for platform in $DOCKER_CROSSPLATFORMS; do
+	(
+		if [ -n "${daemonCompiling[$platform]}" ]; then
+			mkdir -p "$DEST/$platform" # bundles/VERSION/cross/GOOS/GOARCH/docker-VERSION
+			export GOOS=${platform%/*}
+			export GOARCH=${platform##*/}
+			source "${MAKEDIR}/binary" "$DEST/$platform" "-daemoncompileonly"
+			#rm "${MAKEDIR}/binary/docker-daemoncompileonly-$VERSION$binary_extension"
+		fi
+	)
+done
 
 for platform in $DOCKER_CROSSPLATFORMS; do
 	(
