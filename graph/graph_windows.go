@@ -62,7 +62,12 @@ func (graph *Graph) Register(img *image.Image, layerData archive.ArchiveReader) 
 	if wd, ok := graph.driver.(*windows.WindowsGraphDriver); ok && img.Container != "" && layerData == nil {
 		log.Debugf("Copying from container %s.", img.Container)
 
-		ids, err := graph.ParentLayerIds(img)
+		parentImg, err := graph.Get(img.Parent)
+		if err != nil {
+			return err
+		}
+
+		ids, err := graph.ParentLayerIds(parentImg)
 		if err != nil {
 			return err
 		}

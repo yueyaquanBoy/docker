@@ -23,8 +23,8 @@ const (
 var (
 	// Slice of drivers that should be used in an order
 	priority = []string{
-		"windows",
 		"windowsfilter",
+		"windows",
 		"windowsdummy",
 	}
 

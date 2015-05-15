@@ -83,6 +83,25 @@ func (container *Container) Start() (err error) {
 		return err
 	}
 
+	// Once the container filesystem is mounted, prepare the layer to
+	// boot using the Windows driver.
+	if wd, ok := container.daemon.driver.(*windows.WindowsGraphDriver); ok {
+		// Get list of paths to parent layers.
+		img, err := container.daemon.graph.Get(container.ImageID)
+		if err != nil {
+			return err
+		}
+
+		ids, err := container.daemon.graph.ParentLayerIds(img)
+		if err != nil {
+			return err
+		}
+
+		if err := hcsshim.PrepareLayer(wd.Info(), container.ID, wd.LayerIdsToPaths(ids)); err != nil {
+			return err
+		}
+	}
+
 	if err := container.initializeNetworking(); err != nil {
 		return err
 	}
