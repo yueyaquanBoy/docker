@@ -291,6 +291,10 @@ func (container *Container) cleanup() {
 		}
 	}
 
+	if err := container.cleanupStorage(); err != nil {
+		log.Errorf("%v: Failed to cleanup storage: %v", container.ID, err)
+	}
+
 	// TODO WINDOWS. This can be factored out I believe (JJH 2/18) - Unmount
 	if err := container.Unmount(); err != nil {
 		log.Errorf("%v: Failed to umount filesystem: %v", container.ID, err)

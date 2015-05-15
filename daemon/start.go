@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/runconfig"
@@ -40,6 +41,20 @@ func (daemon *Daemon) ContainerStart(job *engine.Job) engine.Status {
 			return job.Error(err)
 		}
 	}
+
+	if err := container.Mount(); err != nil {
+		return job.Error(err)
+	}
+	defer func() {
+		if err := container.Unmount(); err != nil {
+			log.Warnf("Failed to unmount container cleaning up from start: %s", err.Error())
+		}
+	}()
+
+	if err := daemon.setupStorage(container); err != nil {
+		return job.Error(err)
+	}
+
 	if err := container.Start(); err != nil {
 		container.LogEvent("die")
 		return job.Errorf("Cannot start container %s: %s", name, err)

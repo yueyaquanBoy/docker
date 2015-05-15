@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/pkg/guid"
 )
 
 var (
@@ -22,6 +23,7 @@ var (
 	procGetLayerMountPath  = modvmcompute.NewProc("GetLayerMountPath")
 	procCopyLayer          = modvmcompute.NewProc("CopyLayer")
 	procCreateSandboxLayer = modvmcompute.NewProc("CreateSandboxLayer")
+	procPrepareLayer       = modvmcompute.NewProc("PrepareLayer")
 )
 
 /* To pass into syscall, we need a struct matching the following:
@@ -423,6 +425,84 @@ func CreateSandboxLayer(info DriverInfo, layerId, parentId string, parentLayerPa
 	use(unsafe.Pointer(layerIdp))
 	use(unsafe.Pointer(parentIdp))
 	use(unsafe.Pointer(layerDescriptorsp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func PrepareLayer(info DriverInfo, layerId string, parentLayerPaths []string) error {
+	log.Debugln("hcsshim::PrepareLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("layerId:", layerId)
+
+	layers, err := LayerPathsToDescriptors(parentLayerPaths)
+	if err != nil {
+		log.Debugln("Failed to generate layer descriptors ", err)
+		return err
+	}
+
+	layerIdp, err := syscall.UTF16PtrFromString(layerId)
+	if err != nil {
+		log.Debugln("Failed conversion of layerId to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	var layerDescriptorsp *WC_LAYER_DESCRIPTOR
+	if len(layers) > 0 {
+		layerDescriptorsp = &(layers[0])
+	} else {
+		layerDescriptorsp = nil
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procPrepareLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(layerIdp)),
+		uintptr(unsafe.Pointer(layerDescriptorsp)),
+		uintptr(len(layers)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(layerIdp))
+	use(unsafe.Pointer(layerDescriptorsp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func UnprepareLayer(info DriverInfo, layerId string) error {
+	log.Debugln("hcsshim::UnprepareLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("layerId:", layerId)
+
+	layerIdp, err := syscall.UTF16PtrFromString(layerId)
+	if err != nil {
+		log.Debugln("Failed conversion of layerId to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procPrepareLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(layerIdp)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(layerIdp))
 
 	if r1 != 0 {
 		return syscall.Errno(r1)

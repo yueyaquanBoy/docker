@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/docker/docker/daemon/execdriver"
+	"github.com/docker/docker/daemon/graphdriver/windows"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/hcsshim"
 )
 
 func (container *Container) AllocateNetwork() error {
@@ -188,5 +190,12 @@ func populateCommand(c *Container, env []string) error {
 		Dummy: c.Config.Dummy,
 	}
 
+	return nil
+}
+
+func (container *Container) cleanupStorage() error {
+	if wd, ok := container.daemon.driver.(*windows.WindowsGraphDriver); ok {
+		return hcsshim.UnprepareLayer(wd.Info(), container.ID)
+	}
 	return nil
 }

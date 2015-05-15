@@ -46,7 +46,7 @@ func (daemon *Daemon) createRootfs(container *Container) error {
 		return err
 	}
 
-	if wd, ok := daemon.driver.(*windows.WindowsGraphDriver); ok {
+	if wd, ok := daemon.driver.(*windows.WindowsGraphDriver); ok && container.ImageID != "" {
 		// Get list of paths to parent layers.
 		log.Debugln("Container has parent image:", container.ImageID)
 		img, err := daemon.graph.Get(container.ImageID)
@@ -64,7 +64,6 @@ func (daemon *Daemon) createRootfs(container *Container) error {
 			return err
 		}
 	} else {
-		// Hanlding for the dummy driver.
 		if err := daemon.driver.Create(container.ID, container.ImageID); err != nil {
 			return err
 		}
