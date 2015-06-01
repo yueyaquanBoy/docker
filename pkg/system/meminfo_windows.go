@@ -1,6 +1,7 @@
 package system
 
 import (
+	"fmt"
 	"syscall"
 	"unsafe"
 )
@@ -35,6 +36,7 @@ func ReadMemInfo() (*MemInfo, error) {
 	if r1 == 0 {
 		return &MemInfo{}, nil
 	}
+	fmt.Println(msi, msi.ullTotalPhys, int64(msi.ullTotalPhys))
 	return &MemInfo{
 		MemTotal:  int64(msi.ullTotalPhys),
 		MemFree:   int64(msi.ullAvailPhys),

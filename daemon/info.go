@@ -87,11 +87,7 @@ func (daemon *Daemon) SystemInfo() (*types.Info, error) {
 		ExperimentalBuild:  utils.ExperimentalBuild(),
 	}
 
-	// TODO Windows. system.ReadMemInfo isn't implemented, so attempting
-	// to access members of meminfo will cause a SIGSEGV.
-	if runtime.GOOS != "windows" {
-		v.MemTotal = meminfo.MemTotal
-	}
+	v.MemTotal = meminfo.MemTotal
 
 	if httpProxy := os.Getenv("http_proxy"); httpProxy != "" {
 		v.HttpProxy = httpProxy
