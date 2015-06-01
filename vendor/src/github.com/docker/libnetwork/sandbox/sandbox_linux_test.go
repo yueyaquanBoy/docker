@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-	"time"
 
 	"github.com/docker/libnetwork/netutils"
 	"github.com/vishvananda/netlink"
@@ -31,9 +30,6 @@ func newKey(t *testing.T) (string, error) {
 	if _, err := os.Create(name); err != nil {
 		return "", err
 	}
-
-	// Set the rpmCleanupPeriod to be low to make the test run quicker
-	gpmCleanupPeriod = 2 * time.Second
 
 	return name, nil
 }
@@ -88,6 +84,7 @@ func newInfo(t *testing.T) (*Info, error) {
 
 	// ip6, addrv6, err := net.ParseCIDR("2001:DB8::ABCD/48")
 	ip6, addrv6, err = net.ParseCIDR("fe80::3/64")
+
 	if err != nil {
 		return nil, err
 	}
@@ -131,20 +128,13 @@ func verifySandbox(t *testing.T, s Sandbox) {
 
 	_, err = netlink.LinkByName(sboxIfaceName + "0")
 	if err != nil {
-		t.Fatalf("Could not find the interface %s inside the sandbox: %v", sboxIfaceName,
+		t.Fatalf("Could not find the interface %s inside the sandbox: %v", sboxIfaceName+"0",
 			err)
 	}
 
 	_, err = netlink.LinkByName(sboxIfaceName + "1")
 	if err != nil {
-		t.Fatalf("Could not find the interface %s inside the sandbox: %v", sboxIfaceName,
+		t.Fatalf("Could not find the interface %s inside the sandbox: %v", sboxIfaceName+"1",
 			err)
-	}
-}
-
-func verifyCleanup(t *testing.T, s Sandbox) {
-	time.Sleep(time.Duration(gpmCleanupPeriod * 2))
-	if _, err := os.Stat(s.Key()); err == nil {
-		t.Fatalf("The sandbox path %s is not getting cleanup event after twice the cleanup period", s.Key())
 	}
 }

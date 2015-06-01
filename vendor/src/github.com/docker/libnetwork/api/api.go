@@ -16,7 +16,7 @@ var (
 	successResponse  = responseStatus{Status: "Success", StatusCode: http.StatusOK}
 	createdResponse  = responseStatus{Status: "Created", StatusCode: http.StatusCreated}
 	mismatchResponse = responseStatus{Status: "Body/URI parameter mismatch", StatusCode: http.StatusBadRequest}
-	badQueryresponse = responseStatus{Status: "Unsupported query", StatusCode: http.StatusBadRequest}
+	badQueryResponse = responseStatus{Status: "Unsupported query", StatusCode: http.StatusBadRequest}
 )
 
 const (
@@ -100,7 +100,7 @@ func (h *httpHandler) initRouter() {
 		"DELETE": {
 			{"/networks/" + nwID, nil, procDeleteNetwork},
 			{"/networks/" + nwID + "/endpoints/" + epID, nil, procDeleteEndpoint},
-			{"/networks/id/" + nwID + "/endpoints/" + epID + "/containers/" + cnID, nil, procLeaveEndpoint},
+			{"/networks/" + nwID + "/endpoints/" + epID + "/containers/" + cnID, nil, procLeaveEndpoint},
 		},
 	}
 
@@ -108,6 +108,11 @@ func (h *httpHandler) initRouter() {
 	for method, routes := range m {
 		for _, route := range routes {
 			r := h.r.Path("/{.*}" + route.url).Methods(method).HandlerFunc(makeHandler(h.c, route.fct))
+			if route.qrs != nil {
+				r.Queries(route.qrs...)
+			}
+
+			r = h.r.Path(route.url).Methods(method).HandlerFunc(makeHandler(h.c, route.fct))
 			if route.qrs != nil {
 				r.Queries(route.qrs...)
 			}
@@ -170,9 +175,19 @@ func buildEndpointResource(ep libnetwork.Endpoint) *endpointResource {
 	return r
 }
 
-/**************
- Options Parser
-***************/
+/****************
+ Options Parsers
+*****************/
+
+func (nc *networkCreate) parseOptions() []libnetwork.NetworkOption {
+	var setFctList []libnetwork.NetworkOption
+
+	if nc.Options != nil {
+		setFctList = append(setFctList, libnetwork.NetworkOptionGeneric(nc.Options))
+	}
+
+	return setFctList
+}
 
 func (ej *endpointJoin) parseOptions() []libnetwork.EndpointOption {
 	var setFctList []libnetwork.EndpointOption
@@ -224,7 +239,7 @@ func procCreateNetwork(c libnetwork.NetworkController, vars map[string]string, b
 		return "", &responseStatus{Status: "Invalid body: " + err.Error(), StatusCode: http.StatusBadRequest}
 	}
 
-	nw, err := c.NewNetwork(create.NetworkType, create.Name, nil)
+	nw, err := c.NewNetwork(create.NetworkType, create.Name, create.parseOptions()...)
 	if err != nil {
 		return "", convertNetworkError(err)
 	}
@@ -248,7 +263,7 @@ func procGetNetworks(c libnetwork.NetworkController, vars map[string]string, bod
 	name, queryByName := vars[urlNwName]
 	shortID, queryByPid := vars[urlNwPID]
 	if queryByName && queryByPid {
-		return nil, &badQueryresponse
+		return nil, &badQueryResponse
 	}
 
 	if queryByName {
@@ -323,7 +338,7 @@ func procGetEndpoints(c libnetwork.NetworkController, vars map[string]string, bo
 	name, queryByName := vars[urlEpName]
 	shortID, queryByPid := vars[urlEpPID]
 	if queryByName && queryByPid {
-		return nil, &badQueryresponse
+		return nil, &badQueryResponse
 	}
 
 	nwT, nwBy := detectNetworkTarget(vars)

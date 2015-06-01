@@ -15,7 +15,7 @@ func TestLinkCreate(t *testing.T) {
 	dr := d.(*driver)
 
 	mtu := 1490
-	config := &NetworkConfiguration{
+	config := &networkConfiguration{
 		BridgeName: DefaultBridgeName,
 		Mtu:        mtu,
 		EnableIPv6: true,
@@ -79,7 +79,10 @@ func TestLinkCreate(t *testing.T) {
 		t.Fatalf("Could not find source link %s: %v", te.ifaces[0].srcName, err)
 	}
 
-	n := dr.network
+	n, ok := dr.networks["dummy"]
+	if !ok {
+		t.Fatalf("Cannot find network %s inside driver", "dummy")
+	}
 	ip := te.ifaces[0].addr.IP
 	if !n.bridge.bridgeIPv4.Contains(ip) {
 		t.Fatalf("IP %s is not a valid ip in the subnet %s", ip.String(), n.bridge.bridgeIPv4.String())
@@ -105,7 +108,7 @@ func TestLinkCreateTwo(t *testing.T) {
 	defer netutils.SetupTestNetNS(t)()
 	d := newDriver()
 
-	config := &NetworkConfiguration{
+	config := &networkConfiguration{
 		BridgeName: DefaultBridgeName,
 		EnableIPv6: true}
 	genericOption := make(map[string]interface{})
@@ -137,7 +140,7 @@ func TestLinkCreateNoEnableIPv6(t *testing.T) {
 	defer netutils.SetupTestNetNS(t)()
 	d := newDriver()
 
-	config := &NetworkConfiguration{
+	config := &networkConfiguration{
 		BridgeName: DefaultBridgeName}
 	genericOption := make(map[string]interface{})
 	genericOption[netlabel.GenericData] = config
@@ -167,7 +170,7 @@ func TestLinkDelete(t *testing.T) {
 	defer netutils.SetupTestNetNS(t)()
 	d := newDriver()
 
-	config := &NetworkConfiguration{
+	config := &networkConfiguration{
 		BridgeName: DefaultBridgeName,
 		EnableIPv6: true}
 	genericOption := make(map[string]interface{})

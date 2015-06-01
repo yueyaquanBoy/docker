@@ -28,7 +28,7 @@ func TestPortMappingConfig(t *testing.T) {
 	epOptions := make(map[string]interface{})
 	epOptions[netlabel.PortMap] = portBindings
 
-	netConfig := &NetworkConfiguration{
+	netConfig := &networkConfiguration{
 		BridgeName:     DefaultBridgeName,
 		EnableIPTables: true,
 	}
@@ -47,7 +47,11 @@ func TestPortMappingConfig(t *testing.T) {
 	}
 
 	dd := d.(*driver)
-	ep, _ := dd.network.endpoints["ep1"]
+	network, ok := dd.networks["dummy"]
+	if !ok {
+		t.Fatalf("Cannot find network %s inside driver", "dummy")
+	}
+	ep, _ := network.endpoints["ep1"]
 	if len(ep.portMapping) != 2 {
 		t.Fatalf("Failed to store the port bindings into the sandbox info. Found: %v", ep.portMapping)
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/docker/docker/pkg/plugins"
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/docker/libnetwork"
+	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/driverapi"
 	"github.com/docker/libnetwork/netlabel"
 	"github.com/docker/libnetwork/netutils"
@@ -39,8 +40,17 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func createTestController() (libnetwork.NetworkController, error) {
+	controller, err := libnetwork.New("")
+	if err != nil {
+		return nil, err
+	}
+	libnetwork.SetTestDataStore(controller, datastore.NewCustomDataStore(datastore.NewMockStore()))
+	return controller, nil
+}
+
 func createTestNetwork(networkType, networkName string, option options.Generic, netOption options.Generic) (libnetwork.Network, error) {
-	controller, err := libnetwork.New()
+	controller, err := createTestController()
 	if err != nil {
 		return nil, err
 	}
@@ -219,15 +229,18 @@ func TestBridge(t *testing.T) {
 	}
 
 	netOption := options.Generic{
-		"BridgeName":            bridgeName,
-		"AddressIPv4":           subnet,
-		"FixedCIDR":             cidr,
-		"FixedCIDRv6":           cidrv6,
-		"EnableIPv6":            true,
-		"EnableIPTables":        true,
-		"EnableIPMasquerade":    true,
-		"EnableICC":             true,
-		"AllowNonDefaultBridge": true}
+		netlabel.GenericData: options.Generic{
+			"BridgeName":            bridgeName,
+			"AddressIPv4":           subnet,
+			"FixedCIDR":             cidr,
+			"FixedCIDRv6":           cidrv6,
+			"EnableIPv6":            true,
+			"EnableIPTables":        true,
+			"EnableIPMasquerade":    true,
+			"EnableICC":             true,
+			"AllowNonDefaultBridge": true,
+		},
+	}
 
 	network, err := createTestNetwork(bridgeNetType, "testnetwork", option, netOption)
 	if err != nil {
@@ -280,7 +293,7 @@ func TestUnknownDriver(t *testing.T) {
 }
 
 func TestNilRemoteDriver(t *testing.T) {
-	controller, err := libnetwork.New()
+	controller, err := createTestController()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +314,7 @@ func TestDuplicateNetwork(t *testing.T) {
 		defer netutils.SetupTestNetNS(t)()
 	}
 
-	controller, err := libnetwork.New()
+	controller, err := createTestController()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,8 +327,7 @@ func TestDuplicateNetwork(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = controller.NewNetwork(bridgeNetType, "testnetwork",
-		libnetwork.NetworkOptionGeneric(genericOption))
+	_, err = controller.NewNetwork(bridgeNetType, "testnetwork", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,7 +523,7 @@ func TestNetworkEndpointsWalkers(t *testing.T) {
 		defer netutils.SetupTestNetNS(t)()
 	}
 
-	controller, err := libnetwork.New()
+	controller, err := createTestController()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -595,7 +607,7 @@ func TestControllerQuery(t *testing.T) {
 		defer netutils.SetupTestNetNS(t)()
 	}
 
-	controller, err := libnetwork.New()
+	controller, err := createTestController()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -661,7 +673,7 @@ func TestNetworkQuery(t *testing.T) {
 		defer netutils.SetupTestNetNS(t)()
 	}
 
-	controller, err := libnetwork.New()
+	controller, err := createTestController()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1273,7 +1285,7 @@ func TestInvalidRemoteDriver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	controller, err := libnetwork.New()
+	controller, err := libnetwork.New("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1327,7 +1339,7 @@ func TestValidRemoteDriver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	controller, err := libnetwork.New()
+	controller, err := libnetwork.New("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1374,7 +1386,7 @@ func createGlobalInstance(t *testing.T) {
 		}
 	}
 
-	ctrlr, err = libnetwork.New()
+	ctrlr, err = createTestController()
 	if err != nil {
 		t.Fatal(err)
 	}
