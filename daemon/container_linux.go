@@ -21,7 +21,6 @@ import (
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/directory"
-	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/pkg/ulimit"
 	"github.com/docker/docker/runconfig"
@@ -815,26 +814,6 @@ func (container *Container) verifyDaemonSettings() {
 	if container.daemon.sysInfo.IPv4ForwardingDisabled {
 		logrus.Warnf("IPv4 forwarding is disabled. Networking will not work")
 	}
-}
-
-func (container *Container) ExportRw() (archive.Archive, error) {
-	if err := container.Mount(); err != nil {
-		return nil, err
-	}
-	if container.daemon == nil {
-		return nil, fmt.Errorf("Can't load storage driver for unregistered container %s", container.ID)
-	}
-	archive, err := container.daemon.Diff(container)
-	if err != nil {
-		container.Unmount()
-		return nil, err
-	}
-	return ioutils.NewReadCloserWrapper(archive, func() error {
-			err := archive.Close()
-			container.Unmount()
-			return err
-		}),
-		nil
 }
 
 func (container *Container) getIpcContainer() (*Container, error) {

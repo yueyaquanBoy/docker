@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -236,16 +237,47 @@ func (b *Builder) runContextCommand(args []string, allowRemote bool, allowDecomp
 
 func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath string, destPath string, allowRemote bool, allowDecompression bool, allowWildcards bool) error {
 
+	// Cross-platform daemon note.
+	// --------------------------
+	// This function is called to process a line such as ADD from a dockerfile.
+	// origPath will be the file being added and destPath will be target in the
+	// container. In both cases, these will be Linux format paths using / as the
+	// path seperator. The important part to note is that on a Windows daemon,
+	// the target file-system for the container will be in Windows format, hence
+	// there are many situations where we have to be extremely careful manipulating
+	// file system paths.
+
+	// Trim leading / and ./ as appropriate. In Dockerfile:
+	// ADD /file  /path/   -->  ADD file /path/
+	// ADD /      /path/   -->  ADD / /path/
+	// ADD ./file /path/   -->  ADD file /path/
 	if origPath != "" && origPath[0] == '/' && len(origPath) > 1 {
 		origPath = origPath[1:]
 	}
 	origPath = strings.TrimPrefix(origPath, "./")
 
+	isAbs := false
+	if runtime.GOOS == "windows" {
+		// Alternate processing for Windows here is necessary as we can't call
+		// filepath.IsAbs(destPath) as that would verify Windows style paths,
+		// along with drive-letters (eg c:\pathto\file.txt). We (arguably
+		// correctly or not) check for both forward and back slashes as this
+		// is what the 1.4.2 GoLang implementation of IsAbs() does in the
+		// isSlash() function.
+		isAbs = destPath[0] == '\\' || destPath[0] == '/'
+	} else {
+		isAbs = filepath.IsAbs(destPath)
+	}
+
 	// Twiddle the destPath when its a relative path - meaning, make it
-	// relative to the WORKINGDIR
-	if !filepath.IsAbs(destPath) {
+	// relative to the WORKINGDIR. Another cross-platform note. We cannot
+	// use filepath.Join here as that would use the path seperator of the
+	// platform, and we're still working in Linux style paths even on Windows.
+	// However, path.Join hard-codes / as the seperator.
+	// WORKDIR /directory  ADD file path --> ADD file /directory/path
+	if !isAbs {
 		hasSlash := strings.HasSuffix(destPath, "/")
-		destPath = filepath.Join("/", b.Config.WorkingDir, destPath)
+		destPath = path.Join("/", b.Config.WorkingDir, destPath)
 
 		// Make sure we preserve any trailing slash
 		if hasSlash {
@@ -400,6 +432,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 		return nil
 	}
 
+	// TODO Windows: This needs further verification
 	// Must be a dir
 	var subfiles []string
 	absOrigPath := filepath.Join(b.contextPath, ci.origPath)
@@ -676,9 +709,17 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 		return err
 	}
 
-	// Preserve the trailing '/'
-	if strings.HasSuffix(dest, "/") || dest == "." {
-		destPath = destPath + "/"
+	// The destination passed in will be Linux style paths on Windows.
+	// As the real destination is on an OS-specific file path,
+	// we need to do some conversion.
+	if runtime.GOOS == "windows" {
+		dest = strings.Replace(dest, "/", string(os.PathSeparator), -1)
+	}
+
+	// And now that the destination is OS specific to the daemon, the check
+	// for preserving a trailing slash must also be done in an OS specific way.
+	if strings.HasSuffix(dest, string(os.PathSeparator)) || dest == "." {
+		destPath = destPath + string(os.PathSeparator)
 	}
 
 	destStat, err := os.Stat(destPath)
@@ -705,10 +746,13 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 	if decompress {
 		// First try to unpack the source as an archive
 		// to support the untar feature we need to clean up the path a little bit
-		// because tar is very forgiving.  First we need to strip off the archive's
-		// filename from the path but this is only added if it does not end in / .
+		// because tar is very unforgiving.  First we need to strip off the archive's
+		// filename from the path but this is only added if it does not end in an
+		// os-specific file path slash.
 		tarDest := destPath
-		if strings.HasSuffix(tarDest, "/") {
+
+		// See previous comments about the destination being OS specific.
+		if strings.HasSuffix(tarDest, string(os.PathSeparator)) {
 			tarDest = filepath.Dir(destPath)
 		}
 

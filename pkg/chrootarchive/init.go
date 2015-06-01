@@ -10,7 +10,8 @@ import (
 )
 
 func init() {
-	reexec.Register("docker-untar", untar)
+	register()
+	// TODO Windows: Fix applyLayer and call inline rather than reexec.
 	reexec.Register("docker-applyLayer", applyLayer)
 }
 

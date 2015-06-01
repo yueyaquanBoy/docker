@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/docker/docker/daemon/execdriver"
-	"github.com/docker/docker/pkg/archive"
 )
 
 // TODO Windows. A reasonable default at the moment.
@@ -141,14 +140,6 @@ func (container *Container) AllocateNetwork() error {
 	// RequestedMac.
 
 	return nil
-}
-
-func (container *Container) ExportRw() (archive.Archive, error) {
-	if container.IsRunning() {
-		return nil, fmt.Errorf("Cannot export a running container.")
-	}
-	// TODO Windows. Implementation (different to Linux)
-	return nil, nil
 }
 
 func (container *Container) ReleaseNetwork() {
