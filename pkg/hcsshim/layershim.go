@@ -24,6 +24,7 @@ var (
 	procCopyLayer          = modvmcompute.NewProc("CopyLayer")
 	procCreateSandboxLayer = modvmcompute.NewProc("CreateSandboxLayer")
 	procPrepareLayer       = modvmcompute.NewProc("PrepareLayer")
+	procUnprepareLayer     = modvmcompute.NewProc("UnprepareLayer")
 )
 
 /* To pass into syscall, we need a struct matching the following:
@@ -498,7 +499,7 @@ func UnprepareLayer(info DriverInfo, layerId string) error {
 	}
 
 	// Call the procedure itself.
-	r1, _, _ := procPrepareLayer.Call(
+	r1, _, _ := procUnprepareLayer.Call(
 		uintptr(unsafe.Pointer(&infop)),
 		uintptr(unsafe.Pointer(layerIdp)))
 	use(unsafe.Pointer(&infop))
